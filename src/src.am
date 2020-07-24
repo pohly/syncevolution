@@ -43,11 +43,13 @@ nodist_bin_SCRIPTS += src/syncevo-http-server
 endif
 src/syncevo-http-server: $(top_srcdir)/test/syncevo-http-server.py
 	$(AM_V_GEN)sed -e 's|\@PYTHON\@|$(PYTHON)|' $< > $@
+	$(AM_V_GEN)chmod a+x $@
 CLEANFILES += src/syncevo-http-server
 
 nodist_bin_SCRIPTS += src/syncevo-phone-config
 src/syncevo-phone-config: $(top_srcdir)/test/syncevo-phone-config.py
 	$(AM_V_GEN)sed -e 's|\@PYTHON\@|$(PYTHON)|' $< > $@
+	$(AM_V_GEN)chmod a+x $@
 CLEANFILES += src/syncevo-phone-config
 
 SYNCEVOLUTION_DEP =

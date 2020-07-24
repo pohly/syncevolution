@@ -5,9 +5,9 @@ Runs a SyncML HTTP server under the given base URL.'''
 
 # use the same glib main loop in D-Bus and twisted
 from dbus.mainloop.glib import DBusGMainLoop
-from twisted.internet import glib2reactor # for non-GUI apps
+from twisted.internet import gireactor # for non-GUI apps
 DBusGMainLoop(set_as_default=True)
-glib2reactor.install()
+gireactor.install()
 
 import dbus
 import sys

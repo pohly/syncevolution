@@ -1,4 +1,4 @@
-#! /usr/bin/python -u
+#! /usr/bin/python3 -u
 # -*- coding: utf-8 -*-
 # vim: set fileencoding=utf-8 :#
 #
@@ -33,13 +33,13 @@ import heapq
 import string
 import difflib
 import traceback
-import ConfigParser
-import io
+import configparser
 import inspect
 import gzip
-import httplib
+import http.client
 import socket
 import stat
+import pathlib
 
 import dbus
 from dbus.mainloop.glib import DBusGMainLoop
@@ -50,26 +50,12 @@ import re
 import atexit
 import base64
 
-# introduced in python-gobject 2.16, not available
-# on all Linux distros => make it optional
-glib = None
-try:
-    import glib
-except ImportError:
-    try:
-         from gi.repository import GLib as glib
-    except ImportError:
-         pass
+# For debugging.
+import tracemalloc
 
-gobject = None
-try:
-    import gobject
-except ImportError:
-    try:
-         from gi.repository import GObject as gobject
-    except ImportError:
-         pass
+tracemalloc.start()
 
+from gi.repository import GLib as glib
 
 DBusGMainLoop(set_as_default=True)
 
@@ -118,8 +104,8 @@ of the regular expressions'''
                 return
         s = os.stat(fullname)
         if includedata and stat.S_ISREG(s.st_mode):
-            data = open(fullname).read()
-            if filter(lambda x: x not in string.printable, data):
+            data = pathlib.Path(fullname).read_text(encoding="utf-8", errors='ignore')
+            if [x for x in data if x not in string.printable]:
                 data = ' '.join(['%02x'%ord(x) for x in data])
             result[fullname] = (s.st_mtime, data)
         else:
@@ -163,7 +149,7 @@ class Notifications (dbus.service.Object):
 child = os.fork()
 if child == 0:
     bus = dbus.SessionBus()
-    loop = gobject.MainLoop()
+    loop = glib.MainLoop()
     name = dbus.service.BusName("org.freedesktop.Notifications", bus)
     # start dummy notification daemon, if possible;
     # if it fails, ignore (probably already one running)
@@ -174,7 +160,7 @@ if child == 0:
 # testing continues in parent process
 atexit.register(os.kill, child, 9)
 bus = dbus.SessionBus()
-loop = gobject.MainLoop()
+loop = glib.MainLoop()
 
 # Override the default Connection.send_message_with_reply() with a
 # version that uses a very large timeout. That saves us the trouble of
@@ -208,7 +194,7 @@ class Logging(dbus.service.Object):
                          signature='s')
     def log2(self, str):
         if debugger or os.environ.get("TEST_DBUS_VERBOSE", False):
-            print str
+            print(str)
         pass
 
     def log(self, str):
@@ -325,7 +311,7 @@ class Timeout:
         else:
             now = time.time()
             if cls.debugTimeout:
-                print "addTimeout", now, delay_seconds, callback, use_glib
+                print("addTimeout", now, delay_seconds, callback, use_glib)
             timeout = (now + delay_seconds, callback)
             heapq.heappush(cls.alarms, timeout)
             cls.__check_alarms()
@@ -356,7 +342,7 @@ class Timeout:
     def __handler(cls, signum, stack):
         """next_alarm has fired, check for expired timeouts and reinstall"""
         if cls.debugTimeout:
-            print "fired", time.time()
+            print("fired", time.time())
         cls.next_alarm = None
         cls.__check_alarms()
 
@@ -366,7 +352,7 @@ class Timeout:
         while cls.alarms and cls.alarms[0][0] <= now:
             timeout = heapq.heappop(cls.alarms)
             if cls.debugTimeout:
-                print "invoking", timeout
+                print("invoking", timeout)
             timeout[1]()
 
         if cls.alarms:
@@ -379,11 +365,11 @@ class Timeout:
                 if not delay:
                     delay = 1
                 if cls.debugTimeout:
-                    print "next alarm", cls.next_alarm, delay
+                    print("next alarm", cls.next_alarm, delay)
                 signal.alarm(delay)
         elif cls.next_alarm:
             if cls.debugTimeout:
-                print "disarming alarm"
+                print("disarming alarm")
             signal.alarm(0)
             cls.next_alarm = None
 
@@ -461,7 +447,7 @@ def TryKill(pid, signal):
     try:
         os.kill(pid, signal)
         return True
-    except OSError, ex:
+    except OSError as ex:
         # might have quit in the meantime, deal with the race
         # condition
         if ex.errno != 3:
@@ -546,7 +532,7 @@ class DBusUtil(Timeout):
         try:
             while os.waitpid(-1, os.WNOHANG)[0]:
                 pass
-        except OSError, ex:
+        except OSError as ex:
             if ex.errno != errno.ECHILD:
                 raise ex
 
@@ -600,19 +586,21 @@ class DBusUtil(Timeout):
             dbuslog = dbuslog + ".gz"
         syncevolog = self.testname + ".syncevo.txt"
 
-        self.pmonitor = subprocess.Popen(useGZip and ['sh', '-c', 'dbus-monitor | gzip'] or ['dbus-monitor'],
-                                         stdout=open(dbuslog, "w"),
-                                         stderr=subprocess.STDOUT)
+        with open(dbuslog, "w") as stdout:
+            self.pmonitor = subprocess.Popen(useGZip and ['sh', '-c', 'dbus-monitor | gzip'] or ['dbus-monitor'],
+                                             stdout=stdout,
+                                             stderr=subprocess.STDOUT)
         if usingDLT:
             dltlog = self.testname + ".dlt.txt"
             # dlt-receive buffers output and doesn't flush when killed.
             # Trick it into writing each line immediately by pretending that
             # it runs interactively. 'script' had side-effects on the calling
             # terminal, 'unbuffer' (from expect-dev on Debian) worked better.
-            self.pdlt = subprocess.Popen(# ['script', '-q', '-c', 'dlt-receive -a localhost', '/dev/null'],
-                                         'unbuffer dlt-receive -a localhost'.split(),
-                                         stdout=open(dltlog, "w"),
-                                         stderr=subprocess.STDOUT)
+            with open(dltlog, "w") as stdout:
+                self.pdlt = subprocess.Popen(# ['script', '-q', '-c', 'dlt-receive -a localhost', '/dev/null'],
+                                             'unbuffer dlt-receive -a localhost'.split(),
+                                             stdout=stdout,
+                                             stderr=subprocess.STDOUT)
         else:
             self.pdlt = None
 
@@ -631,7 +619,7 @@ class DBusUtil(Timeout):
         if not startServer:
             logging.printf('Not starting syncevo-dbus-server, org.syncevolution is not available.')
         elif debugger:
-            print "\n%s: %s\n" % (self.id(), self.shortDescription())
+            print("\n%s: %s\n" % (self.id(), self.shortDescription()))
             if env.get("HOME") != os.environ.get("HOME") and \
                     os.path.exists(os.path.join(os.environ.get("HOME"), ".gdbinit")):
                 gdbinit = ['-x', os.path.join(os.environ.get("HOME"), ".gdbinit")]
@@ -659,6 +647,8 @@ class DBusUtil(Timeout):
                                                 env=env,
                                                 stdout=logfile,
                                                 stderr=subprocess.STDOUT)
+            if logfile != None:
+                logfile.close()
 
         # Don't use D-Bus auto-activation. Instead wait for our process to show up.
         while self.isServerRunning() and not bus.name_has_owner('org.syncevolution'):
@@ -682,7 +672,7 @@ class DBusUtil(Timeout):
         numerrors = len(result.errors)
         numfailures = len(result.failures)
         if debugger:
-            print "\nrunning\n"
+            print("\nrunning\n")
 
         # Find out what test function we run and look into
         # the function definition to see whether it comes
@@ -702,7 +692,7 @@ class DBusUtil(Timeout):
         try:
             if self.running:
                 unittest.TestCase.run(self, result)
-        except KeyboardInterrupt, ex:
+        except KeyboardInterrupt as ex:
             # somehow this happens when timedout() above raises the exception
             # while inside glib main loop
             result.errors.append((self,
@@ -712,8 +702,8 @@ class DBusUtil(Timeout):
         if debugger:
             # Print result of this test run.
             for test, trace in result.errors[numerrors:] + result.failures[numfailures:]:
-                print trace
-            print "\nDone, quit gdb now to proceed.\nSee %s for D-Bus messages.\n" % dbuslog
+                print(trace)
+            print("\nDone, quit gdb now to proceed.\nSee %s for D-Bus messages.\n" % dbuslog)
         hasfailed = numerrors + numfailures != len(result.errors) + len(result.failures)
 
         if debugger:
@@ -737,7 +727,7 @@ class DBusUtil(Timeout):
         unresponsive = self.killChildren(usingValgrind() and 300 or 20)
         if unresponsive:
             error = "/".join(unresponsive) + " had to be killed with SIGKILL"
-            print "   ", error
+            print("   ", error)
             result.errors.append((self, error))
 
         if not startServer:
@@ -745,18 +735,18 @@ class DBusUtil(Timeout):
         elif debugger:
             serverout = '<see console>'
         else:
-            serverout = open(syncevolog).read()
+            serverout = pathlib.Path(syncevolog).read_text(encoding="utf-8", errors="ignore")
         if DBusUtil.pserver is not None and DBusUtil.pserver.returncode != -15:
             hasfailed = True
         if hasfailed and not debugger:
             # give D-Bus time to settle down
             time.sleep(1)
         if not ShutdownSubprocess(self.pmonitor, 5):
-            print "   dbus-monitor had to be killed with SIGKILL"
+            print("   dbus-monitor had to be killed with SIGKILL")
             result.errors.append((self,
                                   "dbus-monitor had to be killed with SIGKILL"))
         if self.pdlt and not ShutdownSubprocess(self.pdlt, 5):
-            print "   dlt-receive had to be killed with SIGKILL"
+            print("   dlt-receive had to be killed with SIGKILL")
             result.errors.append((self,
                                   "dlt-receive had to be killed with SIGKILL"))
 
@@ -766,21 +756,22 @@ class DBusUtil(Timeout):
         if debugger:
             monitorout = '<see %s>' % dbuslog
         elif useGZip:
-            monitorout = dbuslog + ':\n' + gzip.GzipFile(dbuslog).read()
+            with gzip.GzipFile(dbuslog) as file:
+                monitorout = dbuslog + ':\n' + file.read()
         else:
-            monitorout = dbuslog + ':\n' + open(dbuslog).read()
+            monitorout = dbuslog + ':\n' + pathlib.Path(dbuslog).read_text(encoding="utf-8", errors="ignore")
         report = "\n\nD-Bus traffic:\n%s\n\nserver output:\n%s\n" % \
             (monitorout, serverout)
 
         # Also include any test-specific log files (like syncevo-http-server.log, see TestHTTP).
         for logfile in self.additional_logs:
             try:
-                report = report + ('\n\n%s:\n' % logfile) + open(logfile).read()
+                report = report + ('\n\n%s:\n' % logfile) + pathlib.Path(logfile).read_text(encoding="utf-8", errors="ignore")
             except:
                 pass
 
         if usingDLT and not debugger:
-            dltout = dltlog + ':\n' + open(dltlog).read()
+            dltout = dltlog + ':\n' + pathlib.Path(dltlog).read_text(encoding="utf-8", errors="ignore")
         runTestDBusCheck = getattr(self, 'runTestDBusCheck', None)
         if runTestDBusCheck:
             try:
@@ -895,16 +886,21 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
         for process in os.listdir('/proc'):
             try:
                 pid = int(process)
-                stat = open('/proc/%d/stat' % pid).read()
+            except ValueError:
+                # /proc contains also files that are pids, ignore those.
+                continue
+            try:
+                stat = pathlib.Path('/proc/%d/stat' % pid).read_text(encoding="utf-8", errors="ignore")
                 m = statre.search(stat)
                 if m:
+                    cmdline = pathlib.Path('/proc/%d/cmdline' % pid).read_text(encoding="utf-8").replace('\0', ' ')
                     procs[pid] = m.groupdict()
-                    procs[pid]['cmdline'] = open('/proc/%d/cmdline' % pid, 'r').read().replace('\0', ' ')
+                    procs[pid]['cmdline'] = cmdline
                     for i in ('ppid', 'pgid'):
                         procs[pid][i] = int(procs[pid][i])
-            except:
-                # ignore all errors
-                pass
+            except (FileNotFoundError, ProcessLookupError):
+                # If it is gone now, the process has terminated and wasn't out child.
+                continue
         logging.printf("found processes: %s", procs)
         # Now determine direct or indirect children.
         children = {}
@@ -917,7 +913,7 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
             return procs[pid]['ppid'] == mypid or \
                 procs[pid]['pgid'] in pgids or \
                 isChild(procs[pid]['ppid'])
-        for pid, info in procs.iteritems():
+        for pid, info in procs.items():
             if isChild(pid):
                 children[pid] = (info['name'], info['cmdline'])
         # Exclude dbus-monitor and forked test-dbus.py, they are handled separately.
@@ -950,7 +946,7 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
         pending = []
         # First pass with SIGTERM?
         if delay:
-            for pid, (name, cmdline) in children.iteritems():
+            for pid, (name, cmdline) in children.items():
                 logging.printf("sending SIGTERM to %d %s = %s", pid, name, cmdline)
                 TryKill(pid, signal.SIGTERM)
         start = time.time()
@@ -967,7 +963,7 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
                                        p.pid, children[p.pid], time.asctime())
                         del children[p.pid]
             checkKnown(self.pserver)
-            for pid, name in pids.iteritems():
+            for pid, name in pids.items():
                 try:
                     res = os.waitpid(pid, os.WNOHANG)
                     if res[0]:
@@ -975,7 +971,7 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
                         logging.printf("got status for process %d %s at %s",
                                        pid, name, time.asctime())
                         del children[pid]
-                except OSError, ex:
+                except OSError as ex:
                     if ex.errno == errno.ECHILD:
                         # Process might have transferred to init as parent:
                         #
@@ -1011,7 +1007,7 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
         if children:
             logging.printf("starting to kill unresponsive processes at %s: %s", time.asctime(), str(children))
         killed = []
-        for pid, name in children.iteritems():
+        for pid, name in children.items():
             stacktrace = subprocess.Popen(['gdb',
                                            '-ex', 'thread apply all bt',
                                            '-ex', 'detach',
@@ -1028,31 +1024,31 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
 
     def serverExecutableHelper(self, pid):
         self.assertTrue(self.isServerRunning())
-        maps = open("/proc/%d/maps" % pid, "r")
-        regex = re.compile(r'[0-9a-f]*-[0-9a-f]* r-xp [0-9a-f]* [^ ]* \d* *(.*)\n')
-        parentre = re.compile(r'^PPid:\s+(\d+)', re.MULTILINE)
-        for line in maps:
-            match = regex.match(line)
-            if match:
-                # must be syncevo-dbus-server
-                res = match.group(1)
-                if 'syncevo-dbus-server' in res:
-                    # We sometimes seemed to get symlinks listed in /proc/*/maps
-                    # that were gone when the binary restarted itself, which broke
-                    # TestFileNotify.testRestart. Normalizing the path avoids this.
-                    return (os.path.realpath(res), pid)
-                # not found, try children
-                for process in os.listdir('/proc'):
-                    try:
-                        status = open('/proc/%s/status' % process).read()
-                        parent = parentre.search(status)
-                        if parent and int(parent.group(1)) == pid:
-                            res = self.serverExecutableHelper(int(process))
-                            if res:
-                                return res
-                    except:
-                        # ignore all errors
-                        pass
+        with open("/proc/%d/maps" % pid, encoding="utf-8") as maps:
+            regex = re.compile(r'[0-9a-f]*-[0-9a-f]* r-xp [0-9a-f]* [^ ]* \d* *(.*)\n')
+            parentre = re.compile(r'^PPid:\s+(\d+)', re.MULTILINE)
+            for line in maps:
+                match = regex.match(line)
+                if match:
+                    # must be syncevo-dbus-server
+                    res = match.group(1)
+                    if 'syncevo-dbus-server' in res:
+                        # We sometimes seemed to get symlinks listed in /proc/*/maps
+                        # that were gone when the binary restarted itself, which broke
+                        # TestFileNotify.testRestart. Normalizing the path avoids this.
+                        return (os.path.realpath(res), pid)
+                    # not found, try children
+                    for process in os.listdir('/proc'):
+                        try:
+                            status = pathlib.Path('/proc/%s/status' % process).read_text(encoding="utf-8")
+                            parent = parentre.search(status)
+                            if parent and int(parent.group(1)) == pid:
+                                res = self.serverExecutableHelper(int(process))
+                                if res:
+                                    return res
+                        except:
+                            # ignore all errors
+                            pass
         # no result
         return None
 
@@ -1095,12 +1091,11 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
                                          'org.syncevolution.Server',
                                          self.server.bus_name,
                                          None,
-                                         byte_arrays=True,
-                                         utf8_strings=True)
+                                         byte_arrays=True)
         session = dbus.Interface(bus.get_object(self.server.bus_name,
                                                 sessionpath),
                                  'org.syncevolution.Session')
-        status, error, sources = session.GetStatus(utf8_strings=True)
+        status, error, sources = session.GetStatus()
         if wait and status == "queueing":
             # wait for signal
             loop.run()
@@ -1156,16 +1151,14 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
                                 self.server.bus_name,
                                 sessionpath,
                                 path_keyword='path',
-                                byte_arrays=True,
-                                utf8_strings=True)
+                                byte_arrays=True)
         bus.add_signal_receiver(status,
                                 'StatusChanged',
                                 'org.syncevolution.Session',
                                 self.server.bus_name,
                                 sessionpath,
                                 path_keyword='path',
-                                byte_arrays=True,
-                                utf8_strings=True)
+                                byte_arrays=True)
 
     def setUpConfigListeners(self):
         """records ConfigChanged signal and records it in DBusUtil.events, then quits the loop"""
@@ -1180,8 +1173,7 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
                                 'ConfigChanged',
                                 'org.syncevolution.Server',
                                 self.server.bus_name,
-                                byte_arrays=True, 
-                                utf8_strings=True)
+                                byte_arrays=True)
 
     def setUpConnectionListeners(self, conpath):
         """records connection signals (abort and reply), quits when
@@ -1207,15 +1199,13 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
                                 'org.syncevolution.Connection',
                                 self.server.bus_name,
                                 conpath,
-                                byte_arrays=True, 
-                                utf8_strings=True)
+                                byte_arrays=True)
         bus.add_signal_receiver(reply,
                                 'Reply',
                                 'org.syncevolution.Connection',
                                 self.server.bus_name,
                                 conpath,
-                                byte_arrays=True, 
-                                utf8_strings=True)
+                                byte_arrays=True)
 
     def collectEvents(self, until='\nstatus: done'):
         '''Normally collection of events stops when any of the 'quit events' are encounted.
@@ -1284,7 +1274,7 @@ Use check=lambda: (expr1, expr2, ...) when more than one check is needed.
                   'cache'                     : 'cache'    ,
                   'data'                      : 'data'     ,
                   'templates'                 : 'templates'}
-        for src, dest in pairs.items():
+        for src, dest in list(pairs.items()):
             sourcepath = os.path.join(sourcedir, src)
             destpath = os.path.join(xdg_root, dest)
             # if source exists and could be accessed, then copy them
@@ -1328,7 +1318,7 @@ status: idle, 0, {}
                 return '[' + ', '.join(res) + ']'
             elif isinstance(arg, type({})):
                 res = []
-                items = arg.items()
+                items = list(arg.items())
                 items.sort()
                 for i,e in items:
                     res.append('%s: %s' % (prettyPrintArg(i), prettyPrintArg(e)))
@@ -1355,9 +1345,9 @@ status: idle, 0, {}
         entries = [x for x in os.listdir(cache) if x.startswith(config + '-')]
         entries.sort()
         self.assertEqual(1, len(entries))
-        config = ConfigParser.ConfigParser()
-        content = '[fake]\n' + open(os.path.join(cache, entries[0], 'status.ini')).read()
-        config.readfp(io.BytesIO(content))
+        config = configparser.ConfigParser()
+        content = '[fake]\n' + pathlib.Path(os.path.join(cache, entries[0], 'status.ini')).read_text(encoding="utf-8")
+        config.read_string(content)
         status = config.getint('fake', 'status')
         error = None
         if config.has_option('fake', 'error'):
@@ -1407,16 +1397,16 @@ status: idle, 0, {}
             # keep order: session status must be unchanged or the next status 
             seps = status.split(';')
             lastSeps = lastStatus.split(';')
-            self.assertTrue(statusPairs.has_key(seps[0]))
+            self.assertTrue(seps[0] in statusPairs)
             self.assertTrue(statusPairs[seps[0]] >= statusPairs[lastSeps[0]])
             # check specifiers
             if len(seps) > 1:
                 self.assertEqual(seps[1], "waiting")
-            for sourcename, value in sources.items():
+            for sourcename, value in list(sources.items()):
                 # no error
                 self.assertEqual(value[2], 0)
                 # keep order: source status must also be unchanged or the next status
-                if lastSources.has_key(sourcename):
+                if sourcename in lastSources:
                     lastValue = lastSources[sourcename]
                     self.assertTrue(statusPairs[value[1]] >= statusPairs[lastValue[1]])
 
@@ -1430,12 +1420,12 @@ status: idle, 0, {}
             self.assertFalse(percent < lastPercent)
             lastPercent = percent
 
-        status, error, sources = self.session.GetStatus(utf8_strings=True)
+        status, error, sources = self.session.GetStatus()
         self.assertEqual(status, "done")
         self.assertEqual(error, expectedError)
 
         # now check that report is sane
-        reports = self.session.GetReports(0, 100, utf8_strings=True)
+        reports = self.session.GetReports(0, 100)
         if reportOptional and len(reports) == 0:
             # no report was written
             return None
@@ -1452,7 +1442,7 @@ status: idle, 0, {}
         events = self.prettyPrintEvents()
         try:
             return self.doCheckSync(*args, **keywords)
-        except AssertionError, ex:
+        except AssertionError as ex:
             raise self.failureException('Assertion about the following events failed:\n%s\n%s' %
                                         (events, traceback.format_exc()))
 
@@ -1507,21 +1497,21 @@ status: idle, 0, {}
         dbus.Double: float,
         dbus.Int16: int,
         dbus.Int32: int,
-        dbus.Int64: long,
+        dbus.Int64: int,
         dbus.ObjectPath: str,
         dbus.Signature: str,
-        dbus.String: unicode,
+        dbus.String: str,
         dbus.Struct: tuple,
         dbus.UInt16: int,
         dbus.UInt32: int,
-        dbus.UInt64: long,
-        dbus.UTF8String: unicode
+        dbus.UInt64: int,
+        # dbus.UTF8String: str
         }
 
     def stripDBus(self, instance, sortLists):
         base =  DBusUtil.dbusTypeMapping.get(type(instance), None)
         if base == dict or isinstance(instance, dict):
-            return dict([(self.stripDBus(k, sortLists), self.stripDBus(v, sortLists)) for k, v in instance.iteritems()])
+            return dict([(self.stripDBus(k, sortLists), self.stripDBus(v, sortLists)) for k, v in instance.items()])
         if base == list or isinstance(instance, list):
             l = [self.stripDBus(v, sortLists) for v in instance]
             if sortLists:
@@ -1531,7 +1521,7 @@ status: idle, 0, {}
             return tuple([self.stripDBus(v, sortLists) for v in instance])
         if base == None:
             return instance
-        if base == unicode:
+        if base == str:
             # try conversion to normal string
             try:
                 return str(instance)
@@ -1600,13 +1590,13 @@ class TestDBusServer(DBusUtil, unittest.TestCase):
 
     def testGetConfigsEmpty(self):
         """TestDBusServer.testGetConfigsEmpty - Server.GetConfigsEmpty()"""
-        configs = self.server.GetConfigs(False, utf8_strings=True)
+        configs = self.server.GetConfigs(False)
         self.assertEqual(configs, [])
 
     @property("ENV", "DBUS_TEST_BLUETOOTH=none")
     def testGetConfigsTemplates(self):
         """TestDBusServer.testGetConfigsTemplates - Server.GetConfigsTemplates()"""
-        configs = self.server.GetConfigs(True, utf8_strings=True)
+        configs = self.server.GetConfigs(True)
         configs.sort()
         self.assertEqual(configs, ["Funambol",
                                    "Google",
@@ -1624,8 +1614,8 @@ class TestDBusServer(DBusUtil, unittest.TestCase):
 
     def testGetConfigScheduleWorld(self):
         """TestDBusServer.testGetConfigScheduleWorld - Server.GetConfigScheduleWorld()"""
-        config1 = self.server.GetConfig("scheduleworld", True, utf8_strings=True)
-        config2 = self.server.GetConfig("ScheduleWorld", True, utf8_strings=True)
+        config1 = self.server.GetConfig("scheduleworld", True)
+        config2 = self.server.GetConfig("ScheduleWorld", True)
         self.assertNotEqual(config1[""]["deviceId"], config2[""]["deviceId"])
         config1[""]["deviceId"] = "foo"
         config2[""]["deviceId"] = "foo"
@@ -1634,8 +1624,8 @@ class TestDBusServer(DBusUtil, unittest.TestCase):
     def testInvalidConfig(self):
         """TestDBusServer.testInvalidConfig - Server.NoSuchConfig exception"""
         try:
-            config1 = self.server.GetConfig("no-such-config", False, utf8_strings=True)
-        except dbus.DBusException, ex:
+            config1 = self.server.GetConfig("no-such-config", False)
+        except dbus.DBusException as ex:
             self.assertEqual(str(ex),
                                  "org.syncevolution.NoSuchConfig: No configuration 'no-such-config' found")
         else:
@@ -1649,12 +1639,10 @@ class TestDBusServerStart(DBusUtil, unittest.TestCase):
         shutil.rmtree(xdg_root, True)
         dirname = os.path.join(xdg_root, "share", "dbus-1", "services")
         os.makedirs(dirname)
-        service = open(os.path.join(dirname, "org.syncevolution.service"), "w")
-        service.write('''[D-BUS Service]
+        pathlib.Path(os.path.join(dirname, "org.syncevolution.service")).write_text('''[D-BUS Service]
 Name=org.syncevolution
 Exec=%s
 ''' % which('syncevo-dbus-server'))
-        service.close()
 
         # Now run a private D-Bus session in which dbus-send activates
         # that syncevo-dbus-server. Uses a dbus-session.sh from the
@@ -1667,7 +1655,7 @@ Exec=%s
         # return an unexpected error cause, which then would be returned
         # by dbus-session.sh.
         for key in ('DBUS_SESSION_SH_EDS_BASE', 'DBUS_SESSION_SH_AKONADI'):
-            if env.has_key(key):
+            if key in env:
                 del env[key]
 
         # First run something which just starts the daemon.
@@ -1698,7 +1686,7 @@ Exec=%s
                                 stderr=subprocess.STDOUT)
         (out, err) = dbus.communicate()
         self.assertEqual(0, dbus.returncode,
-                         msg='GetVersions of syncevo-dbus-server failed:\n' + out)
+                         msg='GetVersions of syncevo-dbus-server failed:\n' + out.decode("utf-8"))
 
 
 class TestDBusServerTerm(DBusUtil, unittest.TestCase):
@@ -1714,8 +1702,7 @@ class TestDBusServerTerm(DBusUtil, unittest.TestCase):
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT)
         (out, err) = dbus.communicate()
-        if not re.search(r'''\[ERROR.*already running\?\n''', out):
-            self.fail('second dbus server did not recognize already running server:\n%s' % out)
+        self.assertRegex(out.decode("utf-8"), r'''\[ERROR.*already running\?\n''')
 
     @timeout(100)
     def testNoTerm(self):
@@ -1727,8 +1714,8 @@ class TestDBusServerTerm(DBusUtil, unittest.TestCase):
         for i in range(0, 16):
             time.sleep(1)
             try:
-                self.server.GetConfigs(True, utf8_strings=True)
-            except dbus.DBusException, ex:
+                self.server.GetConfigs(True)
+            except dbus.DBusException as ex:
                 logging.printf('GetConfigs failed: %s', ex)
                 self.fail("dbus server should work correctly")
 
@@ -1738,7 +1725,7 @@ class TestDBusServerTerm(DBusUtil, unittest.TestCase):
         #sleep a duration and wait for syncevo-dbus-server termination
         time.sleep(16)
         try:
-            self.server.GetConfigs(True, utf8_strings=True)
+            self.server.GetConfigs(True)
         except dbus.DBusException:
             pass
         else:
@@ -1753,17 +1740,17 @@ class TestDBusServerTerm(DBusUtil, unittest.TestCase):
                                       "")
         time.sleep(16)
         try:
-            self.server.GetConfigs(True, utf8_strings=True)
+            self.server.GetConfigs(True)
         except dbus.DBusException:
             self.fail("dbus server should not terminate")
 
         connection = dbus.Interface(bus.get_object(self.server.bus_name,
                                                    conpath),
                                     'org.syncevolution.Connection')
-        connection.Close(False, "good bye", utf8_strings=True)
+        connection.Close(False, "good bye")
         time.sleep(16)
         try:
-            self.server.GetConfigs(True, utf8_strings=True)
+            self.server.GetConfigs(True)
         except dbus.DBusException:
             pass
         else:
@@ -1779,21 +1766,21 @@ class TestDBusServerTerm(DBusUtil, unittest.TestCase):
         self.server.Attach()
         time.sleep(16)
         try:
-            self.server.GetConfigs(True, utf8_strings=True)
+            self.server.GetConfigs(True)
         except dbus.DBusException:
             self.fail("dbus server should not terminate")
         self.server.Detach()
         time.sleep(16)
 
         try:
-            self.server.GetConfigs(True, utf8_strings=True)
+            self.server.GetConfigs(True)
         except dbus.DBusException:
             self.fail("dbus server should not terminate")
 
         self.server.Detach()
         time.sleep(16)
         try:
-            self.server.GetConfigs(True, utf8_strings=True)
+            self.server.GetConfigs(True)
         except dbus.DBusException:
             pass
         else:
@@ -1804,7 +1791,7 @@ class TestDBusServerTerm(DBusUtil, unittest.TestCase):
         """TestDBusServerTerm.testAutoSyncOn - D-Bus server must not terminate while auto syncing is enabled"""
         self.setUpSession("scheduleworld")
         # enable auto syncing with a very long delay to prevent accidentally running it
-        config = self.session.GetConfig(True, utf8_strings=True)
+        config = self.session.GetConfig(True)
         config[""]["autoSync"] = "1"
         config[""]["autoSyncInterval"] = "60m"
         self.session.SetConfig(False, False, config)
@@ -1813,7 +1800,7 @@ class TestDBusServerTerm(DBusUtil, unittest.TestCase):
         time.sleep(16)
 
         try:
-            self.server.GetConfigs(True, utf8_strings=True)
+            self.server.GetConfigs(True)
         except dbus.DBusException:
             self.fail("dbus server should not terminate")
 
@@ -1822,7 +1809,7 @@ class TestDBusServerTerm(DBusUtil, unittest.TestCase):
         """TestDBusServerTerm.testAutoSyncOff - D-Bus server must terminate after auto syncing was disabled"""
         self.setUpSession("scheduleworld")
         # enable auto syncing with a very long delay to prevent accidentally running it
-        config = self.session.GetConfig(True, utf8_strings=True)
+        config = self.session.GetConfig(True)
         config[""]["autoSync"] = "1"
         config[""]["autoSyncInterval"] = "60m"
         self.session.SetConfig(False, False, config)
@@ -1835,7 +1822,7 @@ class TestDBusServerTerm(DBusUtil, unittest.TestCase):
 
         time.sleep(16)
         try:
-            self.server.GetConfigs(True, utf8_strings=True)
+            self.server.GetConfigs(True)
         except dbus.DBusException:
             pass
         else:
@@ -1846,7 +1833,7 @@ class TestDBusServerTerm(DBusUtil, unittest.TestCase):
         """TestDBusServerTerm.testAutoSyncOff2 - D-Bus server must terminate after auto syncing was disabled after a while"""
         self.setUpSession("scheduleworld")
         # enable auto syncing with a very long delay to prevent accidentally running it
-        config = self.session.GetConfig(True, utf8_strings=True)
+        config = self.session.GetConfig(True)
         config[""]["autoSync"] = "1"
         config[""]["autoSyncInterval"] = "60m"
         self.session.SetConfig(False, False, config)
@@ -1864,7 +1851,7 @@ class TestDBusServerTerm(DBusUtil, unittest.TestCase):
         time.sleep(16)
 
         try:
-            self.server.GetConfigs(True, utf8_strings=True)
+            self.server.GetConfigs(True)
         except dbus.DBusException:
             pass
         else:
@@ -1909,7 +1896,7 @@ class TestNamedConfig(DBusUtil, unittest.TestCase):
         self.setUpSession("")
         try:
             self.session.SetNamedConfig("foobar", False, False, {})
-        except dbus.DBusException, ex:
+        except dbus.DBusException as ex:
             self.assertEqual(str(ex),
                              "org.syncevolution.InvalidCall: SetNameConfig() only allowed in 'all-configs' sessions")
         else:
@@ -1920,7 +1907,7 @@ class TestNamedConfig(DBusUtil, unittest.TestCase):
         self.setUpSession("foo", [ "all-configs" ])
         try:
             self.session.SetNamedConfig("foobar", False, True, {})
-        except dbus.DBusException, ex:
+        except dbus.DBusException as ex:
             self.assertEqual(str(ex),
                              "org.syncevolution.InvalidCall: SetNameConfig() with temporary config change only supported for config named when starting the session")
         else:
@@ -1978,10 +1965,10 @@ class TestDBusServerPresence(DBusUtil, unittest.TestCase):
             state = expected.pop(server, None)
             if not state:
                 self.fail("unexpected presence signal for config " + server)
-            self.failUnlessEqual(status, state[0])
+            self.assertEqual(status, state[0])
             if not status:
-                self.failUnlessEqual(transport, state[1])
-        except Exception, ex:
+                self.assertEqual(transport, state[1])
+        except Exception as ex:
             # tell test method about the problem
             loop.quit()
             self.cbFailure = ex
@@ -2000,8 +1987,7 @@ class TestDBusServerPresence(DBusUtil, unittest.TestCase):
                                             'org.syncevolution.Server',
                                             self.server.bus_name,
                                             None,
-                                            byte_arrays=True,
-                                            utf8_strings=True)
+                                            byte_arrays=True)
         return match
 
     @property("ENV", "DBUS_TEST_CONNMAN=session DBUS_TEST_NETWORK_MANAGER=none")
@@ -2018,7 +2004,7 @@ class TestDBusServerPresence(DBusUtil, unittest.TestCase):
         match = self.expect({"foo" : ("no transport", "")})
         self.conn.setState("idle")
         loop.run()
-        self.failIf(self.cbFailure)
+        self.assertFalse(self.cbFailure)
         match.remove()
 
         # Changing the properties temporarily does change
@@ -2033,7 +2019,7 @@ class TestDBusServerPresence(DBusUtil, unittest.TestCase):
         # Definitely not the behavior that we want :-/
         self.conn.setState("failure")
         loop.run()
-        self.failIf(self.cbFailure)
+        self.assertFalse(self.cbFailure)
         match.remove()
         # remove temporary config change, back to using HTTP
         # BUG BMC #24648 in syncevo-dbus-server: after discarding the temporary
@@ -2054,7 +2040,7 @@ class TestDBusServerPresence(DBusUtil, unittest.TestCase):
                              "bar" : ("", "http://http-client-2")})
         self.conn.setState("online")
         loop.run()
-        self.failIf(self.cbFailure)
+        self.assertFalse(self.cbFailure)
         match.remove()
 
         # and offline
@@ -2062,7 +2048,7 @@ class TestDBusServerPresence(DBusUtil, unittest.TestCase):
                              "bar" : ("no transport", "")})
         self.conn.setState("idle")
         loop.run()
-        self.failIf(self.cbFailure)
+        self.assertFalse(self.cbFailure)
         match.remove()
 
     @property("ENV", "DBUS_TEST_CONNMAN=session DBUS_TEST_NETWORK_MANAGER=none")
@@ -2102,8 +2088,7 @@ class TestDBusServerPresence(DBusUtil, unittest.TestCase):
                                         'org.syncevolution.Server',
                                         self.server.bus_name,
                                         None,
-                                        byte_arrays=True,
-                                        utf8_strings=True)
+                                        byte_arrays=True)
         match.remove()
         (status, transports) = self.server.CheckPresence ("foo")
         self.assertEqual (status, "no transport")
@@ -2122,7 +2107,7 @@ class TestDBusServerPresence(DBusUtil, unittest.TestCase):
         self.session.SetConfig(False, False, {"" : {"syncURL":
             "obex-bt://bt-client-mixed http://http-client-mixed"}})
         status = self.session.CheckPresence()
-        self.failUnlessEqual (status, "")
+        self.assertEqual (status, "")
 
         # go offline; Bluetooth remains on
         self.conn.setState("idle")
@@ -2132,13 +2117,12 @@ class TestDBusServerPresence(DBusUtil, unittest.TestCase):
                                         'org.syncevolution.Server',
                                         self.server.bus_name,
                                         None,
-                                        byte_arrays=True,
-                                        utf8_strings=True)
+                                        byte_arrays=True)
         match.remove()
 
         # config uses Bluetooth, so syncing still possible
         status = self.session.CheckPresence()
-        self.failUnlessEqual (status, "")
+        self.assertEqual (status, "")
 
         # now the same without Bluetooth, while offline
         self.session.Detach()
@@ -2155,11 +2139,10 @@ class TestDBusServerPresence(DBusUtil, unittest.TestCase):
                                         'org.syncevolution.Server',
                                         self.server.bus_name,
                                         None,
-                                        byte_arrays=True,
-                                        utf8_strings=True)
+                                        byte_arrays=True)
         match.remove()
         status = self.session.CheckPresence()
-        self.failUnlessEqual (status, "")
+        self.assertEqual (status, "")
 
         # temporary config change shall always affect the
         # Session.CheckPresence() result: go offline,
@@ -2170,14 +2153,13 @@ class TestDBusServerPresence(DBusUtil, unittest.TestCase):
                                         'org.syncevolution.Server',
                                         self.server.bus_name,
                                         None,
-                                        byte_arrays=True,
-                                        utf8_strings=True)
+                                        byte_arrays=True)
         match.remove()
         status = self.session.CheckPresence()
-        self.failUnlessEqual (status, "no transport")
+        self.assertEqual (status, "no transport")
         self.session.SetConfig(True, False, {"" : {"syncURL": "obex-bt://bt-client-mixed"}})
         status = self.session.CheckPresence()
-        self.failUnlessEqual (status, "")
+        self.assertEqual (status, "")
 
     def run(self, result):
         self.runTest(result, True)
@@ -2262,8 +2244,7 @@ class TestDBusSession(DBusUtil, unittest.TestCase):
                                 'org.syncevolution.Server',
                                 self.server.bus_name,
                                 None,
-                                byte_arrays=True,
-                                utf8_strings=True)
+                                byte_arrays=True)
 
         def status(*args):
             if self.running:
@@ -2277,13 +2258,12 @@ class TestDBusSession(DBusUtil, unittest.TestCase):
                                 'org.syncevolution.Session',
                                 self.server.bus_name,
                                 sessionpath,
-                                byte_arrays=True, 
-                                utf8_strings=True)
+                                byte_arrays=True)
 
         session = dbus.Interface(bus.get_object(self.server.bus_name,
                                                 sessionpath),
                                  'org.syncevolution.Session')
-        status, error, sources = session.GetStatus(utf8_strings=True)
+        status, error, sources = session.GetStatus()
         self.assertEqual(status, "queueing")
         # use hash so that we can write into it in callback()
         callback_called = {}
@@ -2304,7 +2284,7 @@ class TestDBusSession(DBusUtil, unittest.TestCase):
             expected.sort()
             DBusUtil.quit_events.sort()
             self.assertEqual(DBusUtil.quit_events, expected)
-            status, error, sources = session.GetStatus(utf8_strings=True)
+            status, error, sources = session.GetStatus()
             self.assertEqual(status, "idle")
         finally:
             if callback_called.get(1, "") != "callback()":
@@ -2323,13 +2303,13 @@ class TestSessionAPIsEmptyName(DBusUtil, unittest.TestCase):
 
     def testGetConfigEmptyName(self):
         """TestSessionAPIsEmptyName.testGetConfigEmptyName - reading empty default config"""
-        config = self.session.GetConfig(False, utf8_strings=True)
+        config = self.session.GetConfig(False)
 
     def testGetTemplateEmptyName(self):
         """TestSessionAPIsEmptyName.testGetTemplateEmptyName - trigger error by getting template for empty server name"""
         try:
-            config = self.session.GetConfig(True, utf8_strings=True)
-        except dbus.DBusException, ex:
+            config = self.session.GetConfig(True)
+        except dbus.DBusException as ex:
             self.assertEqual(str(ex),
                                  "org.syncevolution.NoSuchConfig: No template '' found")
         else:
@@ -2338,8 +2318,8 @@ class TestSessionAPIsEmptyName(DBusUtil, unittest.TestCase):
     def testCheckSourceEmptyName(self):
         """TestSessionAPIsEmptyName.testCheckSourceEmptyName - Test the error is reported when the server name is empty for CheckSource"""
         try:
-            self.session.CheckSource("", utf8_strings=True)
-        except dbus.DBusException, ex:
+            self.session.CheckSource("")
+        except dbus.DBusException as ex:
             self.assertEqual(str(ex),
                                  "org.syncevolution.NoSuchSource: '' has no '' datastore")
         else:
@@ -2348,8 +2328,8 @@ class TestSessionAPIsEmptyName(DBusUtil, unittest.TestCase):
     def testGetDatabasesEmptyName(self):
         """TestSessionAPIsEmptyName.testGetDatabasesEmptyName - Test the error is reported when the server name is empty for GetDatabases"""
         try:
-            self.session.GetDatabases("", utf8_strings=True)
-        except dbus.DBusException, ex:
+            self.session.GetDatabases("")
+        except dbus.DBusException as ex:
             self.assertEqual(str(ex),
                                  "org.syncevolution.NoSuchSource: '' has no '' datastore")
         else:
@@ -2358,7 +2338,7 @@ class TestSessionAPIsEmptyName(DBusUtil, unittest.TestCase):
     def testGetReportsEmptyName(self):
         """TestSessionAPIsEmptyName.testGetReportsEmptyName - Test reports from all peers are returned in order when the peer name is empty for GetReports"""
         self.setUpFiles('reports')
-        reports = self.session.GetReports(0, 0xFFFFFFFF, utf8_strings=True)
+        reports = self.session.GetReports(0, 0xFFFFFFFF)
         self.assertEqual(len(reports), 7)
         refPeers = ["dummy-test", "dummy", "dummy-test", "dummy-test",
                     "dummy-test", "dummy_test", "dummy-test"]
@@ -2370,7 +2350,7 @@ class TestSessionAPIsEmptyName(DBusUtil, unittest.TestCase):
         self.setUpFiles('reports')
         self.session.Detach()
         self.setUpSession("@context")
-        reports = self.session.GetReports(0, 0xFFFFFFFF, utf8_strings=True)
+        reports = self.session.GetReports(0, 0xFFFFFFFF)
         self.assertEqual(len(reports), 1)
         self.assertTrue(reports[0]["dir"].endswith("dummy_+test@context-2010-01-20-10-10"))
 
@@ -2439,36 +2419,36 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
     def clearAllConfig(self):
         """ clear a server config. All should be removed. Used internally. """
         emptyConfig = {}
-        self.session.SetConfig(False, False, emptyConfig, utf8_strings=True)
+        self.session.SetConfig(False, False, emptyConfig)
 
     def setupConfig(self):
         """ create a server with full config. Used internally. """
-        self.session.SetConfig(False, False, self.config, utf8_strings=True)
+        self.session.SetConfig(False, False, self.config)
 
     def testTemporaryConfig(self):
         """TestSessionAPIsDummy.testTemporaryConfig - various temporary config changes"""
         ref = { "": { "loglevel": "2", "configName": "dummy-test" } }
         config = copy.deepcopy(ref)
-        self.session.SetConfig(False, False, config, utf8_strings=True)
+        self.session.SetConfig(False, False, config)
         # reset
-        self.session.SetConfig(False, True, {}, utf8_strings=True)
-        self.assertEqual(config, self.session.GetConfig(False, utf8_strings=True))
+        self.session.SetConfig(False, True, {})
+        self.assertEqual(config, self.session.GetConfig(False))
         # add sync prop
-        self.session.SetConfig(True, True, { "": { "loglevel": "100" } }, utf8_strings=True)
+        self.session.SetConfig(True, True, { "": { "loglevel": "100" } })
         config[""]["loglevel"] = "100"
-        self.assertEqual(config, self.session.GetConfig(False, utf8_strings=True))
+        self.assertEqual(config, self.session.GetConfig(False))
         # add source
-        self.session.SetConfig(True, True, { "source/foobar": { "sync": "two-way" } }, utf8_strings=True)
+        self.session.SetConfig(True, True, { "source/foobar": { "sync": "two-way" } })
         config["source/foobar"] = { "sync": "two-way" }
-        self.session.SetConfig(True, True, { "": { "loglevel": "100" } }, utf8_strings=True)
+        self.session.SetConfig(True, True, { "": { "loglevel": "100" } })
         # add source prop
-        self.session.SetConfig(True, True, { "source/foobar": { "database": "xyz" } }, utf8_strings=True)
+        self.session.SetConfig(True, True, { "source/foobar": { "database": "xyz" } })
         config["source/foobar"]["database"] = "xyz"
-        self.assertEqual(config, self.session.GetConfig(False, utf8_strings=True))
+        self.assertEqual(config, self.session.GetConfig(False))
         # reset temporary settings
-        self.session.SetConfig(False, True, { }, utf8_strings=True)
+        self.session.SetConfig(False, True, { })
         config = copy.deepcopy(ref)
-        self.assertEqual(config, self.session.GetConfig(False, utf8_strings=True))
+        self.assertEqual(config, self.session.GetConfig(False))
 
     def testCreateGetConfig(self):
         """TestSessionAPIsDummy.testCreateGetConfig -  test the config is created successfully. """
@@ -2477,7 +2457,7 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         self.config[""]["password"] = "112233445566778"
         self.setupConfig()
         """ get config and compare """
-        config = self.session.GetConfig(False, utf8_strings=True)
+        config = self.session.GetConfig(False)
         self.assertEqual(config, self.config)
         # terminate session and check whether a "config changed" signal
         # was sent as required
@@ -2489,8 +2469,8 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         """TestSessionAPIsDummy.testUpdateConfig -  test the config is permenantly updated correctly. """
         self.setupConfig()
         """ update the given config """
-        self.session.SetConfig(True, False, self.updateConfig, utf8_strings=True)
-        config = self.session.GetConfig(False, utf8_strings=True)
+        self.session.SetConfig(True, False, self.updateConfig)
+        config = self.session.GetConfig(False)
         self.assertEqual(config[""]["username"], "doe")
         self.assertEqual(config["source/addressbook"]["sync"], "slow")
 
@@ -2498,11 +2478,11 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         """TestSessionAPIsDummy.testUpdateConfigTemp -  test the config is just temporary updated but no effect in storage. """
         self.setupConfig()
         """ set config temporary """
-        self.session.SetConfig(True, True, self.updateConfig, utf8_strings=True)
+        self.session.SetConfig(True, True, self.updateConfig)
         self.session.Detach()
         """ creat a new session to lose the temporary configs """
         self.setUpSession("dummy-test")
-        config = self.session.GetConfig(False, utf8_strings=True)
+        config = self.session.GetConfig(False)
         """ no change of any properties """
         self.assertEqual(config, self.config)
 
@@ -2510,9 +2490,9 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         """TestSessionAPIsDummy.testGetConfigUpdateConfigTemp -  test the config is temporary updated and in effect for GetConfig in the current session. """
         self.setupConfig()
         """ set config temporary """
-        self.session.SetConfig(True, True, self.updateConfig, utf8_strings=True)
+        self.session.SetConfig(True, True, self.updateConfig)
         """ GetConfig is affected """
-        config = self.session.GetConfig(False, utf8_strings=True)
+        config = self.session.GetConfig(False)
         """ no change of any properties """
         self.assertEqual(config[""]["username"], "doe")
         self.assertEqual(config["source/addressbook"]["sync"], "slow")
@@ -2521,8 +2501,8 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         """TestSessionAPIsDummy.testGetConfigWithTempConfig -  test the config is gotten for a new temporary config. """
         """ The given config doesn't exist on disk and it's set temporarily. Then GetConfig should
             return the configs temporarily set. """
-        self.session.SetConfig(True, True, self.config, utf8_strings=True)
-        config = self.session.GetConfig(False, utf8_strings=True)
+        self.session.SetConfig(True, True, self.config)
+        config = self.session.GetConfig(False)
         self.assertEqual(config, self.config)
 
     def testUpdateConfigError(self):
@@ -2532,8 +2512,8 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
                      "source/addressbook" : { "sync" : "invalid-value"}
                   }
         try:
-            self.session.SetConfig(True, False, config, utf8_strings=True)
-        except dbus.DBusException, ex:
+            self.session.SetConfig(True, False, config)
+        except dbus.DBusException as ex:
             self.assertEqual(str(ex),
                                  "org.syncevolution.InvalidCall: invalid value 'invalid-value' for "
                                  "property 'sync': 'not one of the valid values (two-way, slow, "
@@ -2549,8 +2529,8 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
     def testUpdateNoConfig(self):
         """TestSessionAPIsDummy.testUpdateNoConfig -  test the right error is reported when updating properties for a non-existing server """
         try:
-            self.session.SetConfig(True, False, self.updateConfig, utf8_strings=True)
-        except dbus.DBusException, ex:
+            self.session.SetConfig(True, False, self.updateConfig)
+        except dbus.DBusException as ex:
             self.assertEqual(str(ex),
                                  "org.syncevolution.NoSuchConfig: The configuration 'dummy-test' doesn't exist")
         else:
@@ -2563,8 +2543,8 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         try:
             config1 = copy.deepcopy(self.config)
             config1[""]["no-such-sync-property"] = "foo"
-            self.session.SetConfig(False, False, config1, utf8_strings=True)
-        except dbus.DBusException, ex:
+            self.session.SetConfig(False, False, config1)
+        except dbus.DBusException as ex:
             self.assertEqual(str(ex),
                                  "org.syncevolution.InvalidCall: unknown property 'no-such-sync-property'")
         else:
@@ -2573,8 +2553,8 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         try:
             config1 = copy.deepcopy(self.config)
             config1["source/addressbook"]["no-such-source-property"] = "foo"
-            self.session.SetConfig(False, False, config1, utf8_strings=True)
-        except dbus.DBusException, ex:
+            self.session.SetConfig(False, False, config1)
+        except dbus.DBusException as ex:
             self.assertEqual(str(ex),
                                  "org.syncevolution.InvalidCall: unknown property 'no-such-source-property'")
         else:
@@ -2583,8 +2563,8 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         try:
             config1 = copy.deepcopy(self.config)
             config1["no-such-key"] = { "foo": "bar" }
-            self.session.SetConfig(False, False, config1, utf8_strings=True)
-        except dbus.DBusException, ex:
+            self.session.SetConfig(False, False, config1)
+        except dbus.DBusException as ex:
             self.assertEqual(str(ex),
                                  "org.syncevolution.InvalidCall: invalid config entry 'no-such-key'")
         else:
@@ -2596,8 +2576,8 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         self.setupConfig()
         self.clearAllConfig()
         try:
-            config = self.session.GetConfig(False, utf8_strings=True)
-        except dbus.DBusException, ex:
+            config = self.session.GetConfig(False)
+        except dbus.DBusException as ex:
             self.assertEqual(str(ex),
                                 "org.syncevolution.NoSuchConfig: No configuration 'dummy-test' found")
         else:
@@ -2606,8 +2586,8 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
     def testCheckSourceNoConfig(self):
         """TestSessionAPIsDummy.testCheckSourceNoConfig -  test the right error is reported when the server doesn't exist """
         try:
-            self.session.CheckSource("", utf8_strings=True)
-        except dbus.DBusException, ex:
+            self.session.CheckSource("")
+        except dbus.DBusException as ex:
             self.assertEqual(str(ex),
                                  "org.syncevolution.NoSuchSource: 'dummy-test' has no '' datastore")
         else:
@@ -2617,8 +2597,8 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         """TestSessionAPIsDummy.testCheckSourceNoSourceName -  test the right error is reported when the datastore doesn't exist """
         self.setupConfig()
         try:
-            self.session.CheckSource("dummy", utf8_strings=True)
-        except dbus.DBusException, ex:
+            self.session.CheckSource("dummy")
+        except dbus.DBusException as ex:
             self.assertEqual(str(ex),
                                  "org.syncevolution.NoSuchSource: 'dummy-test' "
                                  "has no 'dummy' datastore")
@@ -2629,10 +2609,10 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         """TestSessionAPIsDummy.testCheckSourceInvalidEvolutionSource -  test the right error is reported when the evolutionsource is invalid """
         self.setupConfig()
         config = { "source/memo" : { "database" : "impossible-source"} }
-        self.session.SetConfig(True, False, config, utf8_strings=True)
+        self.session.SetConfig(True, False, config)
         try:
-            self.session.CheckSource("memo", utf8_strings=True)
-        except dbus.DBusException, ex:
+            self.session.CheckSource("memo")
+        except dbus.DBusException as ex:
             self.assertEqual(str(ex),
                                  "org.syncevolution.SourceUnusable: The datastore 'memo' is not usable")
         else:
@@ -2643,8 +2623,8 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         self.setupConfig()
         config = { "source/memo" : { "backend" : "no-such-backend"} }
         try:
-            self.session.SetConfig(True, False, config, utf8_strings=True)
-        except dbus.DBusException, ex:
+            self.session.SetConfig(True, False, config)
+        except dbus.DBusException as ex:
             expected = "org.syncevolution.InvalidCall: invalid value 'no-such-backend' for property 'backend': "
             self.assertEqual(str(ex)[0:len(expected)], expected)
         else:
@@ -2656,10 +2636,10 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         config = { "source/memo" : { "backend" : "file",
                                      "databaseFormat" : "text/calendar",
                                      "database" : "file:///no/such/path" } }
-        self.session.SetConfig(True, False, config, utf8_strings=True)
+        self.session.SetConfig(True, False, config)
         try:
-            self.session.CheckSource("memo", utf8_strings=True)
-        except dbus.DBusException, ex:
+            self.session.CheckSource("memo")
+        except dbus.DBusException as ex:
             self.assertEqual(str(ex),
                                  "org.syncevolution.SourceUnusable: The datastore 'memo' is not usable")
         else:
@@ -2670,23 +2650,23 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         self.setupConfig()
         try:
             for source in self.sources:
-                self.session.CheckSource(source, utf8_strings=True)
-        except dbus.DBusException, ex:
+                self.session.CheckSource(source)
+        except dbus.DBusException as ex:
             self.fail(ex)
 
     def testCheckSourceUpdateConfigTemp(self):
         """TestSessionAPIsDummy.testCheckSourceUpdateConfigTemp -  test the config is temporary updated and in effect for GetDatabases in the current session. """
         self.setupConfig()
         tempConfig = {"source/temp" : { "backend" : "calendar"}}
-        self.session.SetConfig(True, True, tempConfig, utf8_strings=True)
-        databases2 = self.session.CheckSource("temp", utf8_strings=True)
+        self.session.SetConfig(True, True, tempConfig)
+        databases2 = self.session.CheckSource("temp")
 
     def testGetDatabasesNoConfig(self):
         """TestSessionAPIsDummy.testGetDatabasesNoConfig -  test the right error is reported when the server doesn't exist """
         # make sure the config doesn't exist """
         try:
-            self.session.GetDatabases("", utf8_strings=True)
-        except dbus.DBusException, ex:
+            self.session.GetDatabases("")
+        except dbus.DBusException as ex:
             self.assertEqual(str(ex),
                                  "org.syncevolution.NoSuchSource: 'dummy-test' has no '' datastore")
         else:
@@ -2696,8 +2676,8 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         """TestSessionAPIsDummy.testGetDatabasesEmpty -  test the right error is reported for non-existing datastore"""
         self.setupConfig()
         try:
-            databases = self.session.GetDatabases("never_use_this_source_name", utf8_strings=True)
-        except dbus.DBusException, ex:
+            databases = self.session.GetDatabases("never_use_this_source_name")
+        except dbus.DBusException as ex:
             self.assertEqual(str(ex),
                                  "org.syncevolution.NoSuchSource: 'dummy-test' has no 'never_use_this_source_name' datastore")
         else:
@@ -2711,12 +2691,12 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         sources = ['addressbook', 'calendar', 'todo', 'memo']
         databases1 = []
         for source in sources:
-            databases1.append(self.session.GetDatabases(source, utf8_strings=True))
+            databases1.append(self.session.GetDatabases(source))
         # reverse the list of sources and get databases again
         sources.reverse()
         databases2 = []
         for source in sources:
-            databases2.append(self.session.GetDatabases(source, utf8_strings=True))
+            databases2.append(self.session.GetDatabases(source))
         # sort two arrays
         databases1.sort()
         databases2.sort()
@@ -2726,36 +2706,36 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         """TestSessionAPIsDummy.testGetDatabasesUpdateConfigTemp -  test the config is temporary updated and in effect for GetDatabases in the current session. """
         self.setupConfig()
         # file backend: reports a short help text instead of a real database list
-        databases1 = self.session.GetDatabases("calendar", utf8_strings=True)
+        databases1 = self.session.GetDatabases("calendar")
         # databaseFormat is required for file backend, otherwise it
         # cannot be instantiated and even simple operations as reading
         # the (in this case fixed) list of databases fail
         tempConfig = {"source/temp" : { "backend" : "file", "databaseFormat" : "text/calendar" }}
-        self.session.SetConfig(True, True, tempConfig, utf8_strings=True)
-        databases2 = self.session.GetDatabases("temp", utf8_strings=True)
+        self.session.SetConfig(True, True, tempConfig)
+        databases2 = self.session.GetDatabases("temp")
         self.assertEqual(databases2, databases1)
 
     def testGetReportsNoConfig(self):
         """TestSessionAPIsDummy.testGetReportsNoConfig -  Test nothing is gotten when the given server doesn't exist. Also covers boundaries """
-        reports = self.session.GetReports(0, 0, utf8_strings=True)
+        reports = self.session.GetReports(0, 0)
         self.assertEqual(reports, [])
-        reports = self.session.GetReports(0, 1, utf8_strings=True)
+        reports = self.session.GetReports(0, 1)
         self.assertEqual(reports, [])
-        reports = self.session.GetReports(0, 0xFFFFFFFF, utf8_strings=True)
+        reports = self.session.GetReports(0, 0xFFFFFFFF)
         self.assertEqual(reports, [])
-        reports = self.session.GetReports(0xFFFFFFFF, 0xFFFFFFFF, utf8_strings=True)
+        reports = self.session.GetReports(0xFFFFFFFF, 0xFFFFFFFF)
         self.assertEqual(reports, [])
 
     def testGetReportsNoReports(self):
         """TestSessionAPIsDummy.testGetReportsNoReports -  Test when the given server has no reports. Also covers boundaries """
         self.setupConfig()
-        reports = self.session.GetReports(0, 0, utf8_strings=True)
+        reports = self.session.GetReports(0, 0)
         self.assertEqual(reports, [])
-        reports = self.session.GetReports(0, 1, utf8_strings=True)
+        reports = self.session.GetReports(0, 1)
         self.assertEqual(reports, [])
-        reports = self.session.GetReports(0, 0xFFFFFFFF, utf8_strings=True)
+        reports = self.session.GetReports(0, 0xFFFFFFFF)
         self.assertEqual(reports, [])
-        reports = self.session.GetReports(0xFFFFFFFF, 0xFFFFFFFF, utf8_strings=True)
+        reports = self.session.GetReports(0xFFFFFFFF, 0xFFFFFFFF)
         self.assertEqual(reports, [])
 
     def testGetReportsByRef(self):
@@ -2842,25 +2822,25 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
                     "source-todo-stat-local-any-reject" : "3",
                     "source-todo-stat-local-added-total" : "24",
                     "source-todo-stat-remote-removed-total" : "80" }
-        reports = self.session.GetReports(0, 0, utf8_strings=True)
+        reports = self.session.GetReports(0, 0)
         self.assertEqual(reports, [])
         # get only one report
-        reports = self.session.GetReports(0, 1, utf8_strings=True)
+        reports = self.session.GetReports(0, 1)
         self.assertTrue(len(reports) == 1)
         del reports[0]["dir"]
 
         self.assertEqual(reports[0], report0)
         """ the number of reference sessions is totally 5. Check the returned count
         when parameter is bigger than 5 """
-        reports = self.session.GetReports(0, 0xFFFFFFFF, utf8_strings=True)
+        reports = self.session.GetReports(0, 0xFFFFFFFF)
         self.assertTrue(len(reports) == 5)
         # start from 2, this could check integer overflow
-        reports2 = self.session.GetReports(2, 0xFFFFFFFF, utf8_strings=True)
+        reports2 = self.session.GetReports(2, 0xFFFFFFFF)
         self.assertTrue(len(reports2) == 3)
         # the first element of reports2 should be the same as the third element of reports
         self.assertEqual(reports[2], reports2[0])
         # indexed from 5, nothing could be gotten
-        reports = self.session.GetReports(5, 0xFFFFFFFF, utf8_strings=True)
+        reports = self.session.GetReports(5, 0xFFFFFFFF)
         self.assertEqual(reports, [])
 
     def testRestoreByRef(self):
@@ -2868,12 +2848,12 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         self.setUpFiles('restore')
         self.setupConfig()
         self.setUpListeners(self.sessionpath)
-        reports = self.session.GetReports(0, 1, utf8_strings=True)
+        reports = self.session.GetReports(0, 1)
         dir = reports[0]["dir"]
         sessionpath, session = self.createSession("dummy-test", False)
         #TODO: check restore result, how?
         #restore data before this session
-        self.session.Restore(dir, True, [], utf8_strings=True)
+        self.session.Restore(dir, True, [])
         loop.run()
         self.session.Detach()
 
@@ -2893,11 +2873,11 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
             self.assertFalse(status == lastStatus and lastSources == sources)
             # no error
             self.assertEqual(error, 0)
-            for sourcename, value in sources.items():
+            for sourcename, value in list(sources.items()):
                 # no error
                 self.assertEqual(value[2], 0)
                 # keep order: source status must also be unchanged or the next status
-                if lastSources.has_key(sourcename):
+                if sourcename in lastSources:
                     lastValue = lastSources[sourcename]
                     self.assertTrue(statusPairs[value[1]] >= statusPairs[lastValue[1]])
 
@@ -2910,9 +2890,9 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
             self.assertFalse(percent < lastPercent)
             lastPercent = percent
 
-        session.SetConfig(False, False, self.config, utf8_strings=True)
+        session.SetConfig(False, False, self.config)
         #restore data after this session
-        session.Restore(dir, False, ["addressbook", "calendar"], utf8_strings=True)
+        session.Restore(dir, False, ["addressbook", "calendar"])
         loop.run()
 
     def testSecondRestore(self):
@@ -2920,20 +2900,20 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         self.setUpFiles('restore')
         self.setupConfig()
         self.setUpListeners(self.sessionpath)
-        reports = self.session.GetReports(0, 1, utf8_strings=True)
+        reports = self.session.GetReports(0, 1)
         dir = reports[0]["dir"]
         sessionpath, session = self.createSession("dummy-test", False)
         try:
-            session.Restore(dir, False, [], utf8_strings=True)
-        except dbus.DBusException, ex:
+            session.Restore(dir, False, [])
+        except dbus.DBusException as ex:
             self.assertEqual(str(ex),
                     "org.syncevolution.InvalidCall: session is not active, call not allowed at this time")
         else:
             self.fail("no exception thrown")
 
         self.session.Detach()
-        session.SetConfig(False, False, self.config, utf8_strings=True)
-        session.Restore(dir, False, [], utf8_strings=True)
+        session.SetConfig(False, False, self.config)
+        session.Restore(dir, False, [])
         loop.run()
 
     @timeout(300)
@@ -2948,11 +2928,11 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
             if state == "request":
                 self.assertEqual(self.lastState, "unknown")
                 self.lastState = "request"
-                self.server.InfoResponse(id, "working", {}, utf8_strings=True)
+                self.server.InfoResponse(id, "working", {})
             elif state == "waiting":
                 self.assertEqual(self.lastState, "request")
                 self.lastState = "waiting"
-                self.server.InfoResponse(id, "response", {"password" : "123456"}, utf8_strings=True)
+                self.server.InfoResponse(id, "response", {"password" : "123456"})
             elif state == "done":
                 self.assertEqual(self.lastState, "waiting")
                 self.lastState = "done"
@@ -2964,8 +2944,7 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
                                          'org.syncevolution.Server',
                                          self.server.bus_name,
                                          None,
-                                         byte_arrays=True,
-                                         utf8_strings=True)
+                                         byte_arrays=True)
 
         # dbus server will be blocked by gnome-keyring-ask dialog, so we kill it, and then 
         # it can't get the password from gnome keyring and send info request for password
@@ -3000,7 +2979,7 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         config[""]["autoSyncDelay"] = "1"
         config[""]["autoSyncInterval"] = "10s"
         config[""]["password"] = "foobar"
-        self.session.SetConfig(True, False, config, utf8_strings=True)
+        self.session.SetConfig(True, False, config)
 
         def session_ready(object, ready):
             if self.running and object != self.sessionpath and \
@@ -3015,8 +2994,7 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
                                          'org.syncevolution.Server',
                                          self.server.bus_name,
                                          None,
-                                         byte_arrays=True,
-                                         utf8_strings=True)
+                                         byte_arrays=True)
 
         # shut down current session, will allow auto-sync
         self.session.Detach()
@@ -3034,7 +3012,7 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         session = dbus.Interface(bus.get_object(self.server.bus_name,
                                                 self.auto_sync_session_path),
                                  'org.syncevolution.Session')
-        reports = session.GetReports(0, 100, utf8_strings=True)
+        reports = session.GetReports(0, 100)
         self.assertEqual(len(reports), 1)
         self.assertEqual(reports[0]["status"], "20043")
         name = session.GetConfigName()
@@ -3107,7 +3085,7 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         config[""]["password"] = "foobar"
         if notifyLevel != 3:
             config[""]["notifyLevel"] = str(notifyLevel)
-        self.session.SetConfig(True, False, config, utf8_strings=True)
+        self.session.SetConfig(True, False, config)
 
         def session_ready(object, ready):
             if self.running and object != self.sessionpath and \
@@ -3122,8 +3100,7 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
                                          'org.syncevolution.Server',
                                          self.server.bus_name,
                                          None,
-                                         byte_arrays=True,
-                                         utf8_strings=True)
+                                         byte_arrays=True)
 
         # shut down current session, will allow auto-sync
         self.session.Detach()
@@ -3136,7 +3113,7 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         session = dbus.Interface(bus.get_object(self.server.bus_name,
                                                 self.auto_sync_session_path),
                                  'org.syncevolution.Session')
-        reports = session.GetReports(0, 100, utf8_strings=True)
+        reports = session.GetReports(0, 100)
         self.assertEqual(len(reports), 1)
         self.assertEqual(reports[0]["status"], "10500")
         name = session.GetConfigName()
@@ -3167,8 +3144,7 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
                                          'org.syncevolution.Server',
                                          self.server.bus_name,
                                          None,
-                                         byte_arrays=True,
-                                         utf8_strings=True)
+                                         byte_arrays=True)
 
         try:
             timeout = glib.timeout_add(15 * 1000, testDone)
@@ -3236,7 +3212,7 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         for i in ("addressbook", "calendar", "todo", "memo"):
             source = config["source/" + i]
             source["database"] = source["database"] + ".server"
-        self.session.SetConfig(False, False, config, utf8_strings=True)
+        self.session.SetConfig(False, False, config)
         self.session.Detach()
 
         # create dummy-test@default auto-sync config
@@ -3256,7 +3232,7 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
         autoSyncIntervalAccuracy = 3
         config[""]["autoSyncInterval"] = '%ds' % autoSyncIntervalSeconds
         config["source/addressbook"]["uri"] = "addressbook"
-        self.session.SetConfig(False, False, config, utf8_strings=True)
+        self.session.SetConfig(False, False, config)
 
         def session_ready(object, ready):
             if self.running and ready:
@@ -3281,8 +3257,7 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
                                          'org.syncevolution.Server',
                                          self.server.bus_name,
                                          None,
-                                         byte_arrays=True,
-                                         utf8_strings=True)
+                                         byte_arrays=True)
 
         # shut down current session, will allow auto-sync
         self.session.Detach()
@@ -3303,7 +3278,7 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
             session = dbus.Interface(bus.get_object(self.server.bus_name,
                                                     self.auto_sync_session_path),
                                      'org.syncevolution.Session')
-            reports = session.GetReports(0, 100, utf8_strings=True)
+            reports = session.GetReports(0, 100)
             self.assertEqual(len(reports), numSyncs)
             self.assertEqual(reports[0]["status"], "200")
             name = session.GetConfigName()
@@ -3418,8 +3393,7 @@ class TestSessionAPIsDummy(DBusUtil, unittest.TestCase):
                                             'org.syncevolution.Session',
                                             self.server.bus_name,
                                             path,
-                                            byte_arrays=True,
-                                            utf8_strings=True)
+                                            byte_arrays=True)
                     self.session.Execute(['syncevolution', '-q', '--print-config', 'dummy-test'], [])
                     self.ran = 1
                     return True
@@ -3476,8 +3450,8 @@ class TestSessionAPIsReal(DBusUtil, unittest.TestCase):
         configProps = { }
         # check whether 'dbus_unittest' is configured.
         try:
-            configProps = self.session.GetConfig(False, utf8_strings=True)
-        except dbus.DBusException, ex:
+            configProps = self.session.GetConfig(False)
+        except dbus.DBusException as ex:
             self.fail(str(ex) + 
                       ". To test this case, please first set up a correct config named 'dbus_unittest'.")
 
@@ -3536,12 +3510,12 @@ class TestSessionAPIsReal(DBusUtil, unittest.TestCase):
     def testSyncSecondSession(self):
         """TestSessionAPIsReal.testSyncSecondSession - ask for a second session that becomes ready after a real sync"""
         sessionpath2, session2 = self.createSession("", False)
-        status, error, sources = session2.GetStatus(utf8_strings=True)
+        status, error, sources = session2.GetStatus()
         self.assertEqual(status, "queueing")
         self.testSync()
         # now wait for second session becoming ready
         loop.run()
-        status, error, sources = session2.GetStatus(utf8_strings=True)
+        status, error, sources = session2.GetStatus()
         self.assertEqual(status, "idle")
         self.assertEqual(DBusUtil.quit_events, ["session " + self.sessionpath + " done",
                                                     "session " + sessionpath2 + " ready"])
@@ -3561,7 +3535,7 @@ class TestDBusSyncError(DBusUtil, unittest.TestCase):
         self.session.Sync("", {})
         loop.run()
         # TODO: check recorded events in DBusUtil.events
-        status, error, sources = self.session.GetStatus(utf8_strings=True)
+        status, error, sources = self.session.GetStatus()
         self.assertEqual(status, "done")
         self.assertEqual(error, 10500)
 
@@ -3569,10 +3543,10 @@ class TestConnection(DBusUtil, unittest.TestCase):
     """Tests Server.Connect(). Tests depend on getting one Abort signal to terminate."""
 
     """a real message sent to our own server, DevInf stripped, username/password foo/bar"""
-    message1 = '''<?xml version="1.0" encoding="UTF-8"?><SyncML xmlns='SYNCML:SYNCML1.2'><SyncHdr><VerDTD>1.2</VerDTD><VerProto>SyncML/1.2</VerProto><SessionID>255</SessionID><MsgID>1</MsgID><Target><LocURI>http://127.0.0.1:9000/syncevolution</LocURI></Target><Source><LocURI>sc-api-nat</LocURI><LocName>test</LocName></Source><Cred><Meta><Format xmlns='syncml:metinf'>b64</Format><Type xmlns='syncml:metinf'>syncml:auth-md5</Type></Meta><Data>kHzMn3RWFGWSKeBpXicppQ==</Data></Cred><Meta><MaxMsgSize xmlns='syncml:metinf'>20000</MaxMsgSize><MaxObjSize xmlns='syncml:metinf'>4000000</MaxObjSize></Meta></SyncHdr><SyncBody><Alert><CmdID>1</CmdID><Data>200</Data><Item><Target><LocURI>addressbook</LocURI></Target><Source><LocURI>./addressbook</LocURI></Source><Meta><Anchor xmlns='syncml:metinf'><Last>20091105T092757Z</Last><Next>20091105T092831Z</Next></Anchor><MaxObjSize xmlns='syncml:metinf'>4000000</MaxObjSize></Meta></Item></Alert><Final/></SyncBody></SyncML>'''
+    message1 = dbus.ByteArray(b'''<?xml version="1.0" encoding="UTF-8"?><SyncML xmlns='SYNCML:SYNCML1.2'><SyncHdr><VerDTD>1.2</VerDTD><VerProto>SyncML/1.2</VerProto><SessionID>255</SessionID><MsgID>1</MsgID><Target><LocURI>http://127.0.0.1:9000/syncevolution</LocURI></Target><Source><LocURI>sc-api-nat</LocURI><LocName>test</LocName></Source><Cred><Meta><Format xmlns='syncml:metinf'>b64</Format><Type xmlns='syncml:metinf'>syncml:auth-md5</Type></Meta><Data>kHzMn3RWFGWSKeBpXicppQ==</Data></Cred><Meta><MaxMsgSize xmlns='syncml:metinf'>20000</MaxMsgSize><MaxObjSize xmlns='syncml:metinf'>4000000</MaxObjSize></Meta></SyncHdr><SyncBody><Alert><CmdID>1</CmdID><Data>200</Data><Item><Target><LocURI>addressbook</LocURI></Target><Source><LocURI>./addressbook</LocURI></Source><Meta><Anchor xmlns='syncml:metinf'><Last>20091105T092757Z</Last><Next>20091105T092831Z</Next></Anchor><MaxObjSize xmlns='syncml:metinf'>4000000</MaxObjSize></Meta></Item></Alert><Final/></SyncBody></SyncML>''')
 
     """a real WBXML message, expected to trigger an authentication failure"""
-    message1WBXML = base64.b64decode('AqQBagBtbHEDMS4yAAFyA1N5bmNNTC8xLjIAAWUDMjExAAFbAzEAAW5XA2h0dHA6Ly9teS5mdW5hbWJvbC5jb20vc3luYwABAWdXA3NjLWFwaS1uYXQAAVYDcGF0cmljay5vaGx5AAEBTloAAUcDYjY0AAFTA3N5bmNtbDphdXRoLW1kNQABAQAATwNyT0dFbGR1Y2FjNE5mc3dZSm5lR2lnPT0AAQFaAAFMAzE1MDAwMAABVQM0MDAwMDAwAAEBAQAAa19LAzEAAVoAAVMDYXBwbGljYXRpb24vdm5kLnN5bmNtbC1kZXZpbmYrd2J4bWwAAQEAAFRnVwMuL2RldmluZjEyAAEBT8OMewKkA2oASmUDMS4yAAFRA1BhdHJpY2sgT2hseQABVQNTeW5jRXZvbHV0aW9uAAFWA1N5bnRoZXNpcyBBRwABTwMxLjIuOTkrMjAxMjAzMjcrU0UrMjI1MGVhMCt1bmNsZWFuAAFeAzMuNC4wLjM1AAFQA3Vua25vd24AAUkDc2MtYXBpLW5hdAABSwN3b3Jrc3RhdGlvbgABKCkqR10DLi9lZHNfZXZlbnQAAUwDZWRzX2V2ZW50AAFSAzY0AAFaRgN0ZXh0L2NhbGVuZGFyAAFkAzIuMAABAWJGA3RleHQvY2FsZW5kYXIAAWQDMi4wAAEBRUYDdGV4dC9jYWxlbmRhcgABZAMyLjAAAWtYA0JFR0lOAAFjA1ZDQUxFTkRBUgABYwNWVElNRVpPTkUAAWMDU1RBTkRBUkQAAWMDREFZTElHSFQAAWMDVlRPRE8AAWMDVkFMQVJNAAFjA1ZFVkVOVAABYwNWQUxBUk0AAQFrWANFTkQAAWMDVkNBTEVOREFSAAFjA1ZUSU1FWk9ORQABYwNTVEFOREFSRAABYwNEQVlMSUdIVAABYwNWVE9ETwABYwNWQUxBUk0AAWMDVkVWRU5UAAFjA1ZBTEFSTQABAWtYA1ZFUlNJT04AAWMDMi4wAAFtAzEAAQFrWANQUk9ESUQAAW0DMQABAWtYA1RaSUQAAQFrWANEVFNUQVJUAAEBa1gDUlJVTEUAAQFrWANUWk9GRlNFVEZST00AAQFrWANUWk9GRlNFVFRPAAEBa1gDVFpOQU1FAAEBa1gDTEFTVC1NT0RJRklFRAABbQMxAAEBa1gDRFRTVEFNUAABbQMxAAEBa1gDQ1JFQVRFRAABbQMxAAEBa1gDVUlEAAFtAzEAAQFrWANTRVFVRU5DRQABbQMxAAEBa1gDR0VPAAFtAzEAAQFrWANDQVRFR09SSUVTAAEBa1gDQ0xBU1MAAW0DMQABAWtYA1NVTU1BUlkAAW0DMQABAWtYA0RFU0NSSVBUSU9OAAFtAzEAAQFrWANMT0NBVElPTgABbQMxAAEBa1gDVVJMAAFtAzEAAQFrWANDT01QTEVURUQAAW0DMQABbFcDVFpJRAABAWxXA1ZBTFVFAAEBAWtYA0RVRQABbQMxAAFsVwNUWklEAAEBbFcDVkFMVUUAAQEBa1gDUFJJT1JJVFkAAW0DMQABAWtYA1NUQVRVUwABbQMxAAEBa1gDUEVSQ0VOVC1DT01QTEVURQABbQMxAAEBa1gDUkVMQVRFRC1UTwABbQMxAAFsVwNSRUxUWVBFAAFjA1BBUkVOVAABAQFrWANUUklHR0VSAAFtAzEAAWxXA1ZBTFVFAAEBbFcDUkVMQVRFRAABYwNTVEFSVAABYwNFTkQAAQEBa1gDQUNUSU9OAAFtAzEAAQFrWANSRVBFQVQAAW0DMQABAWtYA1gtRVZPTFVUSU9OLUFMQVJNLVVJRAABbQMxAAEBa1gDVFoAAW0DMQABAWtYA1RSQU5TUAABbQMxAAEBa1gDUkVDVVJSRU5DRS1JRAABbQMxAAFsVwNUWklEAAEBbFcDVkFMVUUAAQEBa1gDRVhEQVRFAAEBa1gDWC1TWU5DRVZPTFVUSU9OLUVYREFURS1ERVRBQ0hFRAABbFcDVFpJRAABAQFrWANEVEVORAABbQMxAAFsVwNUWklEAAEBbFcDVkFMVUUAAQEBa1gDRFVSQVRJT04AAW0DMQABAWtYA0FUVEVOREVFAAFsVwNDTgABAWxXA1BBUlRTVEFUAAFjA05FRURTLUFDVElPTgABYwNBQ0NFUFRFRAABYwNERUNMSU5FRAABYwNURU5UQVRJVkUAAWMDREVMRUdBVEVEAAEBbFcDUk9MRQABYwNDSEFJUgABYwNSRVEtUEFSVElDSVBBTlQAAWMDT1BULVBBUlRJQ0lQQU5UAAFjA05PTi1QQVJUSUNJUEFOVAABAWxXA1JTVlAAAWMDVFJVRQABYwNGQUxTRQABAWxXA0xBTkdVQUdFAAEBbFcDQ1VUWVBFAAFjA0lORElWSURVQUwAAWMDR1JPVVAAAWMDUkVTT1VSQ0UAAWMDUk9PTQABYwNVTktOT1dOAAEBAWtYA09SR0FOSVpFUgABbQMxAAFsVwNDTgABAQEBX2ADMQABYAMyAAFgAzMAAWADNAABYAM1AAFgAzYAAWADNwABYAM1NDQwMDEAAQEBAQEBAVNLAzIAAVoAAVMDYXBwbGljYXRpb24vdm5kLnN5bmNtbC1kZXZpbmYrd2J4bWwAAQEAAFRuVwMuL2RldmluZjEyAAEBAQFGSwMzAAFPAzIwMAABVG5XA2V2ZW50AAEBZ1cDLi9lZHNfZXZlbnQAAQFaAAFFSgMyMDEyMDMyOVQxMTAxMjZaAAFPAzIwMTIwMzI5VDExMDE1MloAAQFVAzQwMDAwMDAAAQEBAQAAEgEB')
+    message1WBXML = dbus.ByteArray(base64.b64decode('AqQBagBtbHEDMS4yAAFyA1N5bmNNTC8xLjIAAWUDMjExAAFbAzEAAW5XA2h0dHA6Ly9teS5mdW5hbWJvbC5jb20vc3luYwABAWdXA3NjLWFwaS1uYXQAAVYDcGF0cmljay5vaGx5AAEBTloAAUcDYjY0AAFTA3N5bmNtbDphdXRoLW1kNQABAQAATwNyT0dFbGR1Y2FjNE5mc3dZSm5lR2lnPT0AAQFaAAFMAzE1MDAwMAABVQM0MDAwMDAwAAEBAQAAa19LAzEAAVoAAVMDYXBwbGljYXRpb24vdm5kLnN5bmNtbC1kZXZpbmYrd2J4bWwAAQEAAFRnVwMuL2RldmluZjEyAAEBT8OMewKkA2oASmUDMS4yAAFRA1BhdHJpY2sgT2hseQABVQNTeW5jRXZvbHV0aW9uAAFWA1N5bnRoZXNpcyBBRwABTwMxLjIuOTkrMjAxMjAzMjcrU0UrMjI1MGVhMCt1bmNsZWFuAAFeAzMuNC4wLjM1AAFQA3Vua25vd24AAUkDc2MtYXBpLW5hdAABSwN3b3Jrc3RhdGlvbgABKCkqR10DLi9lZHNfZXZlbnQAAUwDZWRzX2V2ZW50AAFSAzY0AAFaRgN0ZXh0L2NhbGVuZGFyAAFkAzIuMAABAWJGA3RleHQvY2FsZW5kYXIAAWQDMi4wAAEBRUYDdGV4dC9jYWxlbmRhcgABZAMyLjAAAWtYA0JFR0lOAAFjA1ZDQUxFTkRBUgABYwNWVElNRVpPTkUAAWMDU1RBTkRBUkQAAWMDREFZTElHSFQAAWMDVlRPRE8AAWMDVkFMQVJNAAFjA1ZFVkVOVAABYwNWQUxBUk0AAQFrWANFTkQAAWMDVkNBTEVOREFSAAFjA1ZUSU1FWk9ORQABYwNTVEFOREFSRAABYwNEQVlMSUdIVAABYwNWVE9ETwABYwNWQUxBUk0AAWMDVkVWRU5UAAFjA1ZBTEFSTQABAWtYA1ZFUlNJT04AAWMDMi4wAAFtAzEAAQFrWANQUk9ESUQAAW0DMQABAWtYA1RaSUQAAQFrWANEVFNUQVJUAAEBa1gDUlJVTEUAAQFrWANUWk9GRlNFVEZST00AAQFrWANUWk9GRlNFVFRPAAEBa1gDVFpOQU1FAAEBa1gDTEFTVC1NT0RJRklFRAABbQMxAAEBa1gDRFRTVEFNUAABbQMxAAEBa1gDQ1JFQVRFRAABbQMxAAEBa1gDVUlEAAFtAzEAAQFrWANTRVFVRU5DRQABbQMxAAEBa1gDR0VPAAFtAzEAAQFrWANDQVRFR09SSUVTAAEBa1gDQ0xBU1MAAW0DMQABAWtYA1NVTU1BUlkAAW0DMQABAWtYA0RFU0NSSVBUSU9OAAFtAzEAAQFrWANMT0NBVElPTgABbQMxAAEBa1gDVVJMAAFtAzEAAQFrWANDT01QTEVURUQAAW0DMQABbFcDVFpJRAABAWxXA1ZBTFVFAAEBAWtYA0RVRQABbQMxAAFsVwNUWklEAAEBbFcDVkFMVUUAAQEBa1gDUFJJT1JJVFkAAW0DMQABAWtYA1NUQVRVUwABbQMxAAEBa1gDUEVSQ0VOVC1DT01QTEVURQABbQMxAAEBa1gDUkVMQVRFRC1UTwABbQMxAAFsVwNSRUxUWVBFAAFjA1BBUkVOVAABAQFrWANUUklHR0VSAAFtAzEAAWxXA1ZBTFVFAAEBbFcDUkVMQVRFRAABYwNTVEFSVAABYwNFTkQAAQEBa1gDQUNUSU9OAAFtAzEAAQFrWANSRVBFQVQAAW0DMQABAWtYA1gtRVZPTFVUSU9OLUFMQVJNLVVJRAABbQMxAAEBa1gDVFoAAW0DMQABAWtYA1RSQU5TUAABbQMxAAEBa1gDUkVDVVJSRU5DRS1JRAABbQMxAAFsVwNUWklEAAEBbFcDVkFMVUUAAQEBa1gDRVhEQVRFAAEBa1gDWC1TWU5DRVZPTFVUSU9OLUVYREFURS1ERVRBQ0hFRAABbFcDVFpJRAABAQFrWANEVEVORAABbQMxAAFsVwNUWklEAAEBbFcDVkFMVUUAAQEBa1gDRFVSQVRJT04AAW0DMQABAWtYA0FUVEVOREVFAAFsVwNDTgABAWxXA1BBUlRTVEFUAAFjA05FRURTLUFDVElPTgABYwNBQ0NFUFRFRAABYwNERUNMSU5FRAABYwNURU5UQVRJVkUAAWMDREVMRUdBVEVEAAEBbFcDUk9MRQABYwNDSEFJUgABYwNSRVEtUEFSVElDSVBBTlQAAWMDT1BULVBBUlRJQ0lQQU5UAAFjA05PTi1QQVJUSUNJUEFOVAABAWxXA1JTVlAAAWMDVFJVRQABYwNGQUxTRQABAWxXA0xBTkdVQUdFAAEBbFcDQ1VUWVBFAAFjA0lORElWSURVQUwAAWMDR1JPVVAAAWMDUkVTT1VSQ0UAAWMDUk9PTQABYwNVTktOT1dOAAEBAWtYA09SR0FOSVpFUgABbQMxAAFsVwNDTgABAQEBX2ADMQABYAMyAAFgAzMAAWADNAABYAM1AAFgAzYAAWADNwABYAM1NDQwMDEAAQEBAQEBAVNLAzIAAVoAAVMDYXBwbGljYXRpb24vdm5kLnN5bmNtbC1kZXZpbmYrd2J4bWwAAQEAAFRuVwMuL2RldmluZjEyAAEBAQFGSwMzAAFPAzIwMAABVG5XA2V2ZW50AAEBZ1cDLi9lZHNfZXZlbnQAAQFaAAFFSgMyMDEyMDMyOVQxMTAxMjZaAAFPAzIwMTIwMzI5VDExMDE1MloAAQFVAzQwMDAwMDAAAQEBAQAAEgEB'))
 
     def setUp(self):
         self.setUpServer()
@@ -3617,7 +3591,7 @@ class TestConnection(DBusUtil, unittest.TestCase):
         self.config[""]["remoteDeviceId"] = deviceId
         if retryDuration is not None:
             self.config[""]["RetryDuration"] = retryDuration
-        self.session.SetConfig(False, False, self.config, utf8_strings=True)
+        self.session.SetConfig(False, False, self.config)
         self.session.Detach()
         # SyncEvolution <= 1.2.2 delayed the "Session.StatusChanged"
         # "done" signal. The correct behavior is to send that
@@ -3652,8 +3626,8 @@ class TestConnection(DBusUtil, unittest.TestCase):
         self.setupConfig()
         conpath, connection = self.getConnection()
         try:
-            connection.Process('1234', 'invalid message type')
-        except dbus.DBusException, ex:
+            connection.Process(dbus.ByteArray(b'1234'), 'invalid message type')
+        except dbus.DBusException as ex:
             self.assertEqual(str(ex),
                                  "org.syncevolution.Exception: message type 'invalid message type' not supported for starting a sync")
         else:
@@ -3676,8 +3650,8 @@ class TestConnection(DBusUtil, unittest.TestCase):
         self.assertEqual(DBusUtil.reply[1], 'application/vnd.syncml+xml')
         # credentials should have been accepted because must_authenticate=False
         # in Connect(); 508 = "refresh required" is normal
-        self.assertIn('<Status><CmdID>2</CmdID><MsgRef>1</MsgRef><CmdRef>1</CmdRef><Cmd>Alert</Cmd><TargetRef>addressbook</TargetRef><SourceRef>./addressbook</SourceRef><Data>508</Data>', DBusUtil.reply[0])
-        self.assertNotIn('<Chal>', DBusUtil.reply[0])
+        self.assertIn(b'<Status><CmdID>2</CmdID><MsgRef>1</MsgRef><CmdRef>1</CmdRef><Cmd>Alert</Cmd><TargetRef>addressbook</TargetRef><SourceRef>./addressbook</SourceRef><Data>508</Data>', DBusUtil.reply[0])
+        self.assertNotIn(b'<Chal>', DBusUtil.reply[0])
         self.assertEqual(DBusUtil.reply[3], False)
         self.assertNotEqual(DBusUtil.reply[4], '')
         connection.Close(False, 'good bye')
@@ -3718,7 +3692,7 @@ class TestConnection(DBusUtil, unittest.TestCase):
         self.assertNotEqual(DBusUtil.reply, None)
         self.assertEqual(DBusUtil.reply[1], 'application/vnd.syncml+xml')
         # credentials should have been rejected because of wrong Nonce
-        self.assertIn('<Chal>', DBusUtil.reply[0])
+        self.assertIn(b'<Chal>', DBusUtil.reply[0])
         self.assertEqual(DBusUtil.reply[3], False)
         self.assertNotEqual(DBusUtil.reply[4], '')
         # When the login fails, the server also ends the session and the connection;
@@ -3757,8 +3731,8 @@ class TestConnection(DBusUtil, unittest.TestCase):
         """TestConnection.testCredentialsRight - send correct credentials"""
         self.setupConfig()
         conpath, connection = self.getConnection(must_authenticate=True)
-        plain_auth = TestConnection.message1.replace("<Type xmlns='syncml:metinf'>syncml:auth-md5</Type></Meta><Data>kHzMn3RWFGWSKeBpXicppQ==</Data>",
-                                                     "<Type xmlns='syncml:metinf'>syncml:auth-basic</Type></Meta><Data>dGVzdDp0ZXN0</Data>")
+        plain_auth = TestConnection.message1.replace(b"<Type xmlns='syncml:metinf'>syncml:auth-md5</Type></Meta><Data>kHzMn3RWFGWSKeBpXicppQ==</Data>",
+                                                     b"<Type xmlns='syncml:metinf'>syncml:auth-basic</Type></Meta><Data>dGVzdDp0ZXN0</Data>")
         connection.Process(plain_auth, 'application/vnd.syncml+xml')
         loop.run()
         self.assertEqual(DBusUtil.quit_events, ["connection " + conpath + " got reply"])
@@ -3767,7 +3741,7 @@ class TestConnection(DBusUtil, unittest.TestCase):
         self.assertEqual(DBusUtil.reply[1], 'application/vnd.syncml+xml')
         # credentials should have been accepted because with basic auth,
         # credentials can be replayed; 508 = "refresh required" is normal
-        self.assertIn('<Status><CmdID>2</CmdID><MsgRef>1</MsgRef><CmdRef>1</CmdRef><Cmd>Alert</Cmd><TargetRef>addressbook</TargetRef><SourceRef>./addressbook</SourceRef><Data>508</Data>', DBusUtil.reply[0])
+        self.assertIn(b'<Status><CmdID>2</CmdID><MsgRef>1</MsgRef><CmdRef>1</CmdRef><Cmd>Alert</Cmd><TargetRef>addressbook</TargetRef><SourceRef>./addressbook</SourceRef><Data>508</Data>', DBusUtil.reply[0])
         self.assertEqual(DBusUtil.reply[3], False)
         self.assertNotEqual(DBusUtil.reply[4], '')
         connection.Close(False, 'good bye')
@@ -3845,7 +3819,7 @@ class TestConnection(DBusUtil, unittest.TestCase):
         # Now start two more sessions with the second client *without*
         # closing the first one. The server should remove only the
         # first connection of client B.
-        message1_clientB = TestConnection.message1.replace("sc-api-nat", "sc-pim-ppc")
+        message1_clientB = TestConnection.message1.replace(b"sc-api-nat", b"sc-pim-ppc")
         conpath2, connection2 = self.getConnection()
         connection2.Process(message1_clientB, 'application/vnd.syncml+xml')
         conpath3, connection3 = self.getConnection()
@@ -3934,13 +3908,12 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
                                  "source/calendar" : { "uri" : "cal3" },
                                  "source/addressbook" : { "database": "Personal",
                                                           "sync" : "two-way",
-                                                          "uri": "card3" } },
-                               utf8_strings=True)
+                                                          "uri": "card3" } })
         self.session.Detach()
 
         # "bar" shares properties with "foo"
         self.setUpSession("bar")
-        config = self.session.GetConfig(False, utf8_strings=True)
+        config = self.session.GetConfig(False)
         self.assertEqual(config[""]["defaultPeer"], "foobar_peer")
         self.assertEqual(config[""]["deviceId"], "shared-device-identifier")
         self.assertEqual(config["source/addressbook"]["database"], "Personal")
@@ -3949,8 +3922,7 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
                                  "source/calendar" : { "uri" : "cal" },
                                  "source/addressbook" : { "database": "Work",
                                                           "sync" : "refresh-from-client",
-                                                          "uri": "card" } },
-                               utf8_strings=True)
+                                                          "uri": "card" } })
         self.session.Detach()
 
     def testSharing(self):
@@ -3959,7 +3931,7 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
 
         # check how view "foo" has been modified
         self.setUpSession("Foo@deFAULT")
-        config = self.session.GetConfig(False, utf8_strings=True)
+        config = self.session.GetConfig(False)
         self.assertEqual(config[""]["defaultPeer"], "foobar_peer")
         self.assertEqual(config[""]["syncURL"], "http://scheduleworld")
         self.assertEqual(config["source/addressbook"]["database"], "Work")
@@ -3968,14 +3940,14 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
 
         # different ways of addressing this context
         self.setUpSession("")
-        config = self.session.GetConfig(False, utf8_strings=True)
+        config = self.session.GetConfig(False)
         self.assertEqual(config[""]["defaultPeer"], "foobar_peer")
         self.assertIn("source/addressbook", config)
         self.assertNotIn("uri", config["source/addressbook"])
         self.session.Detach()
 
         self.setUpSession("@DEFAULT")
-        config = self.session.GetConfig(False, utf8_strings=True)
+        config = self.session.GetConfig(False)
         self.assertEqual(config[""]["defaultPeer"], "foobar_peer")
         self.assertEqual(config[""]["deviceId"], "shared-device-identifier")
         self.assertIn("source/addressbook", config)
@@ -3984,7 +3956,7 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
 
         # different context
         self.setUpSession("@other_context")
-        config = self.session.GetConfig(False, utf8_strings=True)
+        config = self.session.GetConfig(False)
         self.assertEqual(config[""]["defaultPeer"], "foobar_peer")
         self.assertNotIn("source/addressbook", config)
         self.session.Detach()
@@ -3993,7 +3965,7 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
         """TestMultipleConfigs.testSharedTemplate - templates must contain shared properties"""
         self.setupConfigs()
 
-        config = self.server.GetConfig("scheduleworld", True, utf8_strings=True)
+        config = self.server.GetConfig("scheduleworld", True)
         self.assertEqual(config[""]["defaultPeer"], "foobar_peer")
         self.assertEqual(config[""]["deviceId"], "shared-device-identifier")
         self.assertEqual(config["source/addressbook"]["database"], "Work")
@@ -4004,16 +3976,15 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
 
         # writing for peer modifies properties in "foo" and context
         self.setUpSession("Foo@deFAULT")
-        config = self.session.GetConfig(False, utf8_strings=True)
+        config = self.session.GetConfig(False)
         config["source/addressbook"]["syncFormat"] = "text/vcard"
         config["source/addressbook"]["backend"] = "file"
         config["source/addressbook"]["databaseFormat"] = "text/x-vcard"
         self.session.SetConfig(True, False,
-                               config,
-                               utf8_strings=True)
-        config = self.server.GetConfig("Foo", False, utf8_strings=True)
+                               config)
+        config = self.server.GetConfig("Foo", False)
         self.assertEqual(config["source/addressbook"]["syncFormat"], "text/vcard")
-        config = self.server.GetConfig("@default", False, utf8_strings=True)
+        config = self.server.GetConfig("@default", False)
         self.assertEqual(config["source/addressbook"]["backend"], "file")
         self.assertEqual(config["source/addressbook"]["databaseFormat"], "text/x-vcard")
         self.session.Detach()
@@ -4022,29 +3993,27 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
         """TestMultipleConfigs.testSharedPropertyOther - shared backend properties must be preserved when adding peers"""
         # writing peer modifies properties in "foo" and creates context "@other"
         self.setUpSession("Foo@other")
-        config = self.server.GetConfig("ScheduleWorld@other", True, utf8_strings=True)
+        config = self.server.GetConfig("ScheduleWorld@other", True)
         config["source/addressbook"]["backend"] = "file"
         config["source/addressbook"]["databaseFormat"] = "text/x-vcard"
         self.session.SetConfig(False, False,
-                               config,
-                               utf8_strings=True)
-        config = self.server.GetConfig("Foo", False, utf8_strings=True)
+                               config)
+        config = self.server.GetConfig("Foo", False)
         self.assertEqual(config["source/addressbook"]["backend"], "file")
-        config = self.server.GetConfig("@other", False, utf8_strings=True)
+        config = self.server.GetConfig("@other", False)
         self.assertEqual(config["source/addressbook"]["databaseFormat"], "text/x-vcard")
         self.session.Detach()
 
         # adding second client must preserve backend value
         self.setUpSession("bar@other")
-        config = self.server.GetConfig("Funambol@other", True, utf8_strings=True)
+        config = self.server.GetConfig("Funambol@other", True)
         self.assertEqual(config["source/addressbook"]["backend"], "file")
         self.session.SetConfig(False, False,
-                               config,
-                               utf8_strings=True)
-        config = self.server.GetConfig("bar", False, utf8_strings=True)
+                               config)
+        config = self.server.GetConfig("bar", False)
         self.assertEqual(config["source/addressbook"]["backend"], "file")
         self.assertEqual(config["source/addressbook"].get("syncFormat"), None)
-        config = self.server.GetConfig("@other", False, utf8_strings=True)
+        config = self.server.GetConfig("@other", False)
         self.assertEqual(config["source/addressbook"]["databaseFormat"], "text/x-vcard")
 
     def testOtherContext(self):
@@ -4053,14 +4022,13 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
 
         # write independent "foo@other_context" config
         self.setUpSession("foo@other_context")
-        config = self.session.GetConfig(False, utf8_strings=True)
+        config = self.session.GetConfig(False)
         config[""]["syncURL"] = "http://scheduleworld2"
         config["source/addressbook"] = { "database": "Play",
                                          "uri": "card30" }
         self.session.SetConfig(True, False,
-                               config,
-                               utf8_strings=True)
-        config = self.session.GetConfig(False, utf8_strings=True)
+                               config)
+        config = self.session.GetConfig(False)
         self.assertEqual(config[""]["defaultPeer"], "foobar_peer")
         self.assertEqual(config[""]["syncURL"], "http://scheduleworld2")
         self.assertEqual(config["source/addressbook"]["database"], "Play")
@@ -4069,7 +4037,7 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
 
         # "foo" modified?
         self.setUpSession("foo")
-        config = self.session.GetConfig(False, utf8_strings=True)
+        config = self.session.GetConfig(False)
         self.assertEqual(config[""]["defaultPeer"], "foobar_peer")
         self.assertEqual(config[""]["syncURL"], "http://scheduleworld")
         self.assertEqual(config["source/addressbook"]["database"], "Work")
@@ -4080,18 +4048,18 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
         """TestMultipleConfigs.testSourceRemovalLocal - remove 'addressbook' source in 'foo'"""
         self.setupConfigs()
         self.setUpSession("foo")
-        config = self.session.GetConfig(False, utf8_strings=True)
+        config = self.session.GetConfig(False)
         del config["source/addressbook"]
-        self.session.SetConfig(False, False, config, utf8_strings=True)
+        self.session.SetConfig(False, False, config)
         self.session.Detach()
 
         # "addressbook" still exists in "foo" but only with default values
-        config = self.server.GetConfig("foo", False, utf8_strings=True)
+        config = self.server.GetConfig("foo", False)
         self.assertNotIn("uri", config["source/addressbook"])
         self.assertNotIn("sync", config["source/addressbook"])
 
         # "addressbook" unchanged in "bar"
-        config = self.server.GetConfig("bar", False, utf8_strings=True)
+        config = self.server.GetConfig("bar", False)
         self.assertEqual(config["source/addressbook"]["uri"], "card")
         self.assertEqual(config["source/addressbook"]["sync"], "refresh-from-client")
 
@@ -4099,15 +4067,15 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
         """TestMultipleConfigs.testSourceRemovalGlobal - remove "addressbook" everywhere"""
         self.setupConfigs()
         self.setUpSession("")
-        config = self.session.GetConfig(False, utf8_strings=True)
+        config = self.session.GetConfig(False)
         del config["source/addressbook"]
-        self.session.SetConfig(False, False, config, utf8_strings=True)
+        self.session.SetConfig(False, False, config)
         self.session.Detach()
 
         # "addressbook" gone in "foo" and "bar"
-        config = self.server.GetConfig("foo", False, utf8_strings=True)
+        config = self.server.GetConfig("foo", False)
         self.assertNotIn("source/addressbook", config)
-        config = self.server.GetConfig("bar", False, utf8_strings=True)
+        config = self.server.GetConfig("bar", False)
         self.assertNotIn("source/addressbook", config)
 
     def testRemovePeer(self):
@@ -4115,24 +4083,24 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
         self.setupConfigs()
         self.testOtherContext()
         self.setUpSession("bar")
-        peers = self.session.GetConfigs(False, utf8_strings=True)
+        peers = self.session.GetConfigs(False)
         self.assertEqual(peers,
                              [ "bar", "foo", "foo@other_context" ])
-        peers2 = self.server.GetConfigs(False, utf8_strings=True)
+        peers2 = self.server.GetConfigs(False)
         self.assertEqual(peers, peers2)
         # remove "bar"
-        self.session.SetConfig(False, False, {}, utf8_strings=True)
-        peers = self.server.GetConfigs(False, utf8_strings=True)
+        self.session.SetConfig(False, False, {})
+        peers = self.server.GetConfigs(False)
         self.assertEqual(peers,
                              [ "foo", "foo@other_context" ])
         self.session.Detach()
 
         # other configs should not have been affected
-        config = self.server.GetConfig("foo", False, utf8_strings=True)
+        config = self.server.GetConfig("foo", False)
         self.assertEqual(config[""]["defaultPeer"], "foobar_peer")
         self.assertEqual(config[""]["syncURL"], "http://scheduleworld")
         self.assertEqual(config["source/calendar"]["uri"], "cal3")
-        config = self.server.GetConfig("foo@other_context", False, utf8_strings=True)
+        config = self.server.GetConfig("foo@other_context", False)
         self.assertEqual(config[""]["defaultPeer"], "foobar_peer")
         self.assertEqual(config[""]["syncURL"], "http://scheduleworld2")
         self.assertEqual(config["source/addressbook"]["database"], "Play")
@@ -4142,10 +4110,10 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
         """TestMultipleConfigs.testRemoveContext - remove complete config"""
         self.setupConfigs()
         self.setUpSession("")
-        self.session.SetConfig(False, False, {}, utf8_strings=True)
-        config = self.session.GetConfig(False, utf8_strings=True)
+        self.session.SetConfig(False, False, {})
+        config = self.session.GetConfig(False)
         self.assertEqual(config[""]["defaultPeer"], "foobar_peer")
-        peers = self.server.GetConfigs(False, utf8_strings=True)
+        peers = self.server.GetConfigs(False)
         self.assertEqual(peers, ['foo@other_context'])
         self.session.Detach()
 
@@ -4155,19 +4123,19 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
 
         # deviceID must be shared and thus be reused in templates
         self.setUpSession("")
-        config = self.session.GetConfig(False, utf8_strings=True)
+        config = self.session.GetConfig(False)
         config[""]["DEVICEID"] = "shared-device-identifier"
-        self.session.SetConfig(True, False, config, utf8_strings=True)
-        config = self.server.GetConfig("", False, utf8_strings=True)
+        self.session.SetConfig(True, False, config)
+        config = self.server.GetConfig("", False)
         self.assertEqual(config[""]["deviceId"], "shared-device-identifier")
 
         # get template for default context
-        config = self.server.GetConfig("scheduleworld", True, utf8_strings=True)
+        config = self.server.GetConfig("scheduleworld", True)
         self.assertEqual(config[""]["defaultPeer"], "foobar_peer")
         self.assertEqual(config[""]["deviceId"], "shared-device-identifier")
 
         # now for @other_context - different device ID!
-        config = self.server.GetConfig("scheduleworld@other_context", True, utf8_strings=True)
+        config = self.server.GetConfig("scheduleworld@other_context", True)
         self.assertEqual(config[""]["defaultPeer"], "foobar_peer")
         self.assertNotEqual(config[""]["deviceId"], "shared-device-identifier")
 
@@ -4179,7 +4147,7 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
         # Store username/password in config 'foo' without using keyring.
         # We want this test to work in all cases.
         self.setUpSession("foo")
-        config = self.session.GetConfig(False, utf8_strings=True)
+        config = self.session.GetConfig(False)
         config[""]["keyring"] = "no"
         config[""]["username"] = "john"
         config[""]["password"] = "doe-pwd"
@@ -4188,14 +4156,14 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
 
         # Retrieve username/password.
         self.setUpSession("foo")
-        config = self.session.GetConfig(False, utf8_strings=True)
+        config = self.session.GetConfig(False)
         self.assertEqual(config[""]["username"], "john")
         self.assertEqual(config[""]["password"], "doe-pwd")
         self.session.Detach()
 
         # Re-use credentials in second config.
         self.setUpSession("bar")
-        config = self.session.GetConfig(False, utf8_strings=True)
+        config = self.session.GetConfig(False)
         config[""]["username"] = "id:foo"
         self.assertNotIn("password", config[""])
         self.session.SetConfig(True, False, config)
@@ -4210,7 +4178,7 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
         # user to edit it. This is consistent with showing the
         # password after retrieving it from a keyring.
         self.setUpSession("bar")
-        config = self.session.GetConfig(False, utf8_strings=True)
+        config = self.session.GetConfig(False)
         self.assertEqual(config[""]["username"], "id:foo")
         self.assertEqual(config[""]["password"], "doe-pwd")
 
@@ -4222,14 +4190,14 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
 
         # Check in "foo".
         self.setUpSession("foo")
-        config = self.session.GetConfig(False, utf8_strings=True)
+        config = self.session.GetConfig(False)
         self.assertEqual(config[""]["username"], "john")
         self.assertEqual(config[""]["password"], "doe-pwd-2")
         self.session.Detach()
 
         # Check in "bar".
         self.setUpSession("bar")
-        config = self.session.GetConfig(False, utf8_strings=True)
+        config = self.session.GetConfig(False)
         self.assertEqual(config[""]["username"], "id:foo")
         self.assertEqual(config[""]["password"], "doe-pwd-2")
 
@@ -4239,7 +4207,7 @@ class TestMultipleConfigs(unittest.TestCase, DBusUtil):
         config["source/calendar"]["databaseUser"] = "id:foo"
         self.session.SetConfig(True, False, config)
 
-        config = self.session.GetConfig(False, utf8_strings=True)
+        config = self.session.GetConfig(False)
         self.assertEqual(config[""]["proxyUsername"], "id:foo")
         self.assertEqual(config[""]["proxyPassword"], "doe-pwd-2")
         self.assertEqual(config["source/calendar"]["databaseUser"], "id:foo")
@@ -4262,22 +4230,18 @@ class TestLocalSync(unittest.TestCase, DBusUtil):
         """TestLocalSync.testSync - run a simple slow sync between local dirs"""
         self.setUpConfigs()
         os.makedirs(xdg_root + "/server")
-        output = open(xdg_root + "/server/0", "w")
-        output.write('''BEGIN:VCARD
+        pathlib.Path(xdg_root + "/server/0").write_bytes(rb'''BEGIN:VCARD
 VERSION:3.0
 FN:John Doe
 N:Doe;John
 END:VCARD''')
-        output.close()
         self.setUpListeners(self.sessionpath)
         self.session.Sync("slow", {})
         loop.run()
         self.assertEqual(DBusUtil.quit_events, ["session " + self.sessionpath + " done"])
         self.checkSync()
-        input = open(xdg_root + "/client/0", "r")
-        self.assertIn("FN:John Doe", input.read())
-        input = open(xdg_root + "/server/0", "r")
-        self.assertIn("FN:John Doe", input.read())
+        self.assertIn("FN:John Doe", pathlib.Path(xdg_root + "/client/0").read_text(encoding="utf-8", errors="ignore"))
+        self.assertIn("FN:John Doe", pathlib.Path(xdg_root + "/server/0").read_text(encoding="utf-8", errors="ignore"))
 
     def setUpInfoRequest(self, response={"password" : "123456"}):
         self.lastState = "unknown"
@@ -4286,12 +4250,12 @@ END:VCARD''')
                 self.assertEqual(self.lastState, "unknown")
                 self.lastState = "request"
                 if response != None:
-                    self.server.InfoResponse(id, "working", {}, utf8_strings=True)
+                    self.server.InfoResponse(id, "working", {})
             elif state == "waiting":
                 self.assertEqual(self.lastState, "request")
                 self.lastState = "waiting"
                 if response != None:
-                    self.server.InfoResponse(id, "response", response, utf8_strings=True)
+                    self.server.InfoResponse(id, "response", response)
             elif state == "done":
                 self.assertEqual(self.lastState, "waiting")
                 self.lastState = "done"
@@ -4303,8 +4267,7 @@ END:VCARD''')
                                          'org.syncevolution.Server',
                                          self.server.bus_name,
                                          None,
-                                         byte_arrays=True,
-                                         utf8_strings=True)
+                                         byte_arrays=True)
         return signal
 
     @timeout(100)
@@ -4390,8 +4353,7 @@ END:VCARD''')
                                            'LogOutput',
                                            'org.syncevolution.Server',
                                            self.server.bus_name,
-                                           byte_arrays=True,
-                                           utf8_strings=True)
+                                           byte_arrays=True)
         try:
             loop.run()
         finally:
@@ -4415,7 +4377,7 @@ END:VCARD''')
                 self.assertEqual(self.lastState, "unknown")
                 self.lastState = "request"
                 # kill syncevo-dbus-helper
-                for pid, (name, cmdline) in self.getChildren().iteritems():
+                for pid, (name, cmdline) in self.getChildren().items():
                     if 'syncevo-dbus-helper' in cmdline:
                         logging.printf('killing syncevo-dbus-helper with pid %d', pid)
                         os.kill(pid, signal.SIGKILL)
@@ -4425,8 +4387,7 @@ END:VCARD''')
                                              'org.syncevolution.Server',
                                              self.server.bus_name,
                                              None,
-                                             byte_arrays=True,
-                                             utf8_strings=True)
+                                             byte_arrays=True)
 
         try:
             self.session.Sync("slow", {})
@@ -4455,7 +4416,7 @@ END:VCARD''')
                     logging.printf('got status %d for pid %d', res[1], res[0])
                 else:
                     break
-        except OSError, ex:
+        except OSError as ex:
             if ex.errno != errno.ECHILD:
                 raise ex
 
@@ -4485,7 +4446,7 @@ END:VCARD''')
                 self.assertEqual(self.lastState, "unknown")
                 self.lastState = "request"
                 # kill syncevo-dbus-helper
-                for pid, (name, cmdline) in self.getChildren().iteritems():
+                for pid, (name, cmdline) in self.getChildren().items():
                     if 'syncevo-local-sync' in cmdline:
                         logging.printf('killing syncevo-local-sync with pid %d', pid)
                         os.kill(pid, signal.SIGKILL)
@@ -4495,8 +4456,7 @@ END:VCARD''')
                                              'org.syncevolution.Server',
                                              self.server.bus_name,
                                              None,
-                                             byte_arrays=True,
-                                             utf8_strings=True)
+                                             byte_arrays=True)
 
         try:
             self.session.Sync("slow", {})
@@ -4526,7 +4486,7 @@ END:VCARD''')
                     logging.printf('got status %d for pid %d', res[1], res[0])
                 else:
                     break
-        except OSError, ex:
+        except OSError as ex:
             if ex.errno != errno.ECHILD:
                 raise ex
 
@@ -4564,8 +4524,7 @@ END:VCARD''')
                                              'org.syncevolution.Server',
                                              self.server.bus_name,
                                              None,
-                                             byte_arrays=True,
-                                             utf8_strings=True)
+                                             byte_arrays=True)
 
         try:
             self.session.Sync("slow", {})
@@ -4586,7 +4545,7 @@ END:VCARD''')
                     logging.printf('got status %d for pid %d', res[1], res[0])
                 else:
                     break
-        except OSError, ex:
+        except OSError as ex:
             if ex.errno != errno.ECHILD:
                 raise ex
 
@@ -4611,7 +4570,7 @@ END:VCARD''')
         self.killTimeout = None
         self.syncProcesses = {}
         def killServer():
-            self.syncProcesses = dict([ (p, props) for p, props in self.getChildren().iteritems() if not existingProcesses.has_key(p)])
+            self.syncProcesses = dict([ (p, props) for p, props in self.getChildren().items() if p not in existingProcesses])
             logging.printf('Sync processes: %s', str(self.syncProcesses))
             if pid != serverPid:
                 logging.printf('killing syncevo-dbus-server wrapper with pid %d', serverPid)
@@ -4621,7 +4580,7 @@ END:VCARD''')
             logging.printf('killing syncevo-dbus-server with pid %d', pid)
             try:
                 os.kill(pid, signal.SIGKILL)
-            except OSError, ex:
+            except OSError as ex:
                 if ex.errno != errno.ESRCH:
                     logging.printf('unexpected error killing syncevo-dbus-server with pid %d: %s', pid, ex)
             if pid in self.syncProcesses:
@@ -4636,8 +4595,7 @@ END:VCARD''')
                                            'LogOutput',
                                            'org.syncevolution.Server',
                                            self.server.bus_name,
-                                           byte_arrays=True,
-                                           utf8_strings=True)
+                                           byte_arrays=True)
         try:
             self.session.Sync("slow", {})
             loop.run()
@@ -4650,11 +4608,11 @@ END:VCARD''')
         # Wait for syncevo-dbus-helper and syncevo-local-sync to shut down.
         logging.printf('waiting for sync process(es): %s', str(self.syncProcesses))
         while self.syncProcesses:
-            for pid, process in self.syncProcesses.items():
+            for pid, process in list(self.syncProcesses.items()):
                 logging.printf('checking sync process %d', pid)
                 try:
                     os.kill(pid, 0)
-                except OSError, ex:
+                except OSError as ex:
                     if ex.errno == errno.ESRCH:
                         logging.printf('has terminated: sync process %d = %s', pid, process)
                         del self.syncProcesses[pid]
@@ -4670,7 +4628,7 @@ class TestLocalCache(unittest.TestCase, DBusUtil):
 
     serverDB = os.path.join(xdg_root, "server")
     clientDB = os.path.join(xdg_root, "client")
-    johnVCard = '''BEGIN:VCARD
+    johnVCard = rb'''BEGIN:VCARD
 VERSION:3.0
 FN:John Doe
 N:Doe;John
@@ -4741,14 +4699,14 @@ PHOTO;TYPE=JPEG;ENCODING=B:/9j/4AAQSkZJRgABAQEASABIAAD/4QAWRXhpZgAATU0AKgAAAAgAA
 GEO:;
 X-FOOBAR-EXTENSION;X-FOOBAR-PARAMETER=foobar:has to be stored internally by engine and preserved in testExtensions test\; never sent to a peer
 X-TEST;PARAMETER1=nonquoted;PARAMETER2="quoted because of spaces":Content with\nMultiple\nText lines\nand national chars: äöü
-END:VCARD'''
-    joanVCard = '''BEGIN:VCARD
+END:VCARD'''.encode("utf-8")
+    joanVCard = rb'''BEGIN:VCARD
 VERSION:3.0
 FN:Joan Doe
 N:Doe;Joan
 ORG:Test Inc.
 END:VCARD'''
-    vcardFormat = '''BEGIN:VCARD
+    vcardFormat = rb'''BEGIN:VCARD
 VERSION:3.0
 FN:John_%(index)02d Doe
 N:Doe;John_%(index)02d
@@ -4784,7 +4742,7 @@ END:VCARD'''
         self.session.Detach()
         DBusUtil.quit_events = []
         self.sessionpath, self.session = self.createSession("remote@client", True)
-        reports = self.session.GetReports(0, 100, utf8_strings=True)
+        reports = self.session.GetReports(0, 100)
         self.assertEqual(numReports, len(reports))
         report = reports[0]
         self.assertEqual("two-way", report.get('source-addressbook-mode'))
@@ -4801,9 +4759,7 @@ END:VCARD'''
         """TestLocalCache.testItemRemoval - ensure that extra item on server gets removed"""
         self.setUpConfigs()
         os.makedirs(self.serverDB)
-        output = open(os.path.join(self.serverDB, self.itemName), "w")
-        output.write(self.johnVCard)
-        output.close()
+        pathlib.Path(os.path.join(self.serverDB, self.itemName)).write_bytes(self.johnVCard)
         self.setUpListeners(self.sessionpath)
         # ask for incremental caching, expecting it do be done in slow mode
         self.session.Sync("local-cache-incremental", {})
@@ -4824,7 +4780,7 @@ END:VCARD'''
         self.session.Detach()
         DBusUtil.quit_events = []
         self.sessionpath, self.session = self.createSession("remote@client", True)
-        reports = self.session.GetReports(0, 100, utf8_strings=True)
+        reports = self.session.GetReports(0, 100)
         self.assertEqual(1, len(reports))
         report = reports[0]
         self.assertEqual("slow", report.get('source-addressbook-mode'))
@@ -4855,14 +4811,10 @@ END:VCARD'''
         # sync.
         for i in range(0, numAdditional):
             filename = self.itemNameFormat % i
-            data = self.vcardFormat % { 'index': i }
+            data = self.vcardFormat % { b'index': i }
             entries.append(filename)
-            output = open(os.path.join(self.clientDB, filename), "w")
-            output.write(data)
-            output.close()
-            output = open(os.path.join(self.serverDB, filename), "w")
-            output.write(data)
-            output.close()
+            pathlib.Path(os.path.join(self.clientDB, filename)).write_bytes(data)
+            pathlib.Path(os.path.join(self.serverDB, filename)).write_bytes(data)
 
         if syncFirst:
             # get client and server into sync with empty databases
@@ -4885,9 +4837,7 @@ END:VCARD'''
 
         # create named contact on client
         entries.append(self.itemName)
-        output = open(os.path.join(self.clientDB, self.itemName), "w")
-        output.write(self.johnVCard)
-        output.close()
+        pathlib.Path(os.path.join(self.clientDB, self.itemName)).write_bytes(self.johnVCard)
 
         # ask for incremental caching, expecting it do be done in slow mode
         # or incremental, depending on whether both sides were in sync
@@ -4916,7 +4866,7 @@ END:VCARD'''
         self.session.Detach()
         DBusUtil.quit_events = []
         self.sessionpath, self.session = self.createSession("remote@client", True)
-        reports = self.session.GetReports(0, 100, utf8_strings=True)
+        reports = self.session.GetReports(0, 100)
         self.assertEqual(numReports, len(reports))
         report = reports[0]
         self.assertEqual(syncFirst and "two-way" or "slow", report.get('source-addressbook-mode'))
@@ -4936,9 +4886,7 @@ END:VCARD'''
         elif change == "Update":
             # update item to something completely, using an incremental sync
             serverContent = os.listdir(self.serverDB)
-            output = open(os.path.join(self.clientDB, self.itemName), "w")
-            output.write(self.joanVCard)
-            output.close()
+            pathlib.Path(os.path.join(self.clientDB, self.itemName)).write_bytes(self.joanVCard)
             self.sessionpath, self.session = self.createSession("server", True)
             self.setUpListeners(self.sessionpath)
             self.session.Sync("local-cache-incremental", {})
@@ -4959,7 +4907,7 @@ END:VCARD'''
             self.assertEqual(entries, clientDBEntries)
             DBusUtil.quit_events = []
             self.sessionpath, self.session = self.createSession("remote@client", True)
-            reports = self.session.GetReports(0, 100, utf8_strings=True)
+            reports = self.session.GetReports(0, 100)
             self.assertEqual(numReports, len(reports))
             report = reports[0]
             self.assertEqual("two-way", report.get('source-addressbook-mode'))
@@ -4994,7 +4942,7 @@ END:VCARD'''
             self.assertEqual(entries, clientDBEntries)
             DBusUtil.quit_events = []
             self.sessionpath, self.session = self.createSession("remote@client", True)
-            reports = self.session.GetReports(0, 100, utf8_strings=True)
+            reports = self.session.GetReports(0, 100)
             self.assertEqual(numReports, len(reports))
             report = reports[0]
             self.assertEqual("two-way", report.get('source-addressbook-mode'))
@@ -5079,33 +5027,22 @@ END:VCARD'''
         entries = []
         os.makedirs(self.clientDB)
         os.makedirs(self.serverDB)
-        output = open(os.path.join(self.serverDB, self.itemName), "w")
-        output.write(self.johnComplexVCard)
-        output.close()
+        pathlib.Path(os.path.join(self.serverDB, self.itemName)).write_bytes(self.johnComplexVCard)
         entries.append(self.itemName)
-        output = open(os.path.join(self.clientDB, self.itemName), "w")
-        if step == 0:
-            # Client has simple version of John,
-            # slow sync applies update.
-            data = self.johnVCard
-        else:
-            # Client has same data as on server,
-            # slow sync changes nothing.
-            data = self.johnComplexVCard
-        output.write(data)
-        output.close()
+        pathlib.Path(os.path.join(self.clientDB, self.itemName)).write_bytes(
+            # Initially, the client has simple version of John,
+            # slow sync applies update. Then it has the same
+            # data as the server, so slow sync changes nothing.
+            data = self.johnVCard if step == 0 else self.johnComplexVCard
+        )
 
         # create additional items in client and server
         for i in range(0, numAdditional):
             filename = self.itemNameFormat % i
-            data = self.vcardFormat % { 'index': i }
+            data = self.vcardFormat % { b'index': i }
             entries.append(filename)
-            output = open(os.path.join(self.clientDB, filename), "w")
-            output.write(data)
-            output.close()
-            output = open(os.path.join(self.serverDB, filename), "w")
-            output.write(data)
-            output.close()
+            pathlib.Path(os.path.join(self.clientDB, filename)).write_bytes(data)
+            pathlib.Path(os.path.join(self.serverDB, filename)).write_bytes(data)
 
         self.setUpListeners(self.sessionpath)
         self.session.Sync("local-cache-incremental", {})
@@ -5129,7 +5066,7 @@ END:VCARD'''
         self.session.Detach()
         DBusUtil.quit_events = []
         self.sessionpath, self.session = self.createSession("remote@client", True)
-        reports = self.session.GetReports(0, 100, utf8_strings=True)
+        reports = self.session.GetReports(0, 100)
         self.assertEqual(1, len(reports))
         report = reports[0]
         self.assertEqual("slow", report.get('source-addressbook-mode'))
@@ -5151,9 +5088,7 @@ END:VCARD'''
                 # force slow sync by removing client-side meta data
                 shutil.rmtree(os.path.join(xdg_root, 'config', 'syncevolution', 'default', 'peers', 'server', '.remote@client', '.synthesis'))
             serverContent = os.listdir(self.serverDB)
-            output = open(os.path.join(self.clientDB, self.itemName), "w")
-            output.write(self.johnVCard)
-            output.close()
+            pathlib.Path(os.path.join(self.clientDB, self.itemName)).write_bytes(self.johnVCard)
             self.sessionpath, self.session = self.createSession("server", True)
             self.setUpListeners(self.sessionpath)
             self.session.Sync("local-cache-incremental", {})
@@ -5174,7 +5109,7 @@ END:VCARD'''
             self.assertEqual(entries, clientDBEntries)
             DBusUtil.quit_events = []
             self.sessionpath, self.session = self.createSession("remote@client", True)
-            reports = self.session.GetReports(0, 100, utf8_strings=True)
+            reports = self.session.GetReports(0, 100)
             self.assertEqual(2, len(reports))
             report = reports[0]
             self.assertEqual(step == 1 and "slow" or "two-way", report.get('source-addressbook-mode'))
@@ -5342,7 +5277,7 @@ class TestFileNotify(unittest.TestCase, DBusUtil):
             # this should not succeed: the server should rejects the
             # session request because it is shutting down
             self.setUpSession("")
-        except dbus.DBusException, ex:
+        except dbus.DBusException as ex:
             self.assertEqual(str(ex),
                              "org.syncevolution.Exception: server shutting down")
         else:
@@ -5353,7 +5288,7 @@ class TestFileNotify(unittest.TestCase, DBusUtil):
         """TestFileNotify.testRestart - set up auto sync, then check that server restarts"""
         self.assertTrue(self.isServerRunning())
         self.setUpSession("memotoo")
-        config = self.session.GetConfig(True, utf8_strings=True)
+        config = self.session.GetConfig(True)
         config[""]["autoSync"] = "1"
         self.session.SetConfig(False, False, config)
         self.assertTrue(self.isServerRunning())
@@ -5375,7 +5310,7 @@ bt_mac         = "D4:5D:42:73:E4:6C"
 bt_fingerprint = "Nokia 5230"
 bt_name        = "My Nokia 5230"
 bt_template    = "Bluetooth_%s_1" % (bt_mac)
-bt_device      = "%s/dev_%s" % (bt_adaptor, string.replace(bt_mac, ':', '_'))
+bt_device      = "%s/dev_%s" % (bt_adaptor, bt_mac.replace(':', '_'))
 
 class BluezAdapter (dbus.service.Object):
     def __init__(self):
@@ -5428,7 +5363,7 @@ class BluezDevice (dbus.service.Object):
     def DiscoverServices(self, ignore):
         # This should be the last method to call. So, we need to quit the loop to exit.
         loop.quit()
-        return { 65569L: '<?xml version="1.0" encoding="UTF-8" ?><record><attribute id="0x0000"><uint32 value="0x00010021" /></attribute><attribute id="0x0001"><sequence><uuid value="0x1200" /></sequence></attribute><attribute id="0x0005"><sequence><uuid value="0x1002" /></sequence></attribute><attribute id="0x0006"><sequence><uint16 value="0x454e" /><uint16 value="0x006a" /><uint16 value="0x0100" /></sequence></attribute><attribute id="0x0100"><text value="PnP Information" /></attribute><attribute id="0x0200"><uint16 value="0x0102" /></attribute><attribute id="0x0201"><uint16 value="0x0001" /></attribute><attribute id="0x0202"><uint16 value="0x00e7" /></attribute><attribute id="0x0203"><uint16 value="0x0000" /></attribute><attribute id="0x0204"><boolean value="true" /></attribute><attribute id="0x0205"><uint16 value="0x0001" /></attribute></record>'}
+        return { 65569: '<?xml version="1.0" encoding="UTF-8" ?><record><attribute id="0x0000"><uint32 value="0x00010021" /></attribute><attribute id="0x0001"><sequence><uuid value="0x1200" /></sequence></attribute><attribute id="0x0005"><sequence><uuid value="0x1002" /></sequence></attribute><attribute id="0x0006"><sequence><uint16 value="0x454e" /><uint16 value="0x006a" /><uint16 value="0x0100" /></sequence></attribute><attribute id="0x0100"><text value="PnP Information" /></attribute><attribute id="0x0200"><uint16 value="0x0102" /></attribute><attribute id="0x0201"><uint16 value="0x0001" /></attribute><attribute id="0x0202"><uint16 value="0x00e7" /></attribute><attribute id="0x0203"><uint16 value="0x0000" /></attribute><attribute id="0x0204"><boolean value="true" /></attribute><attribute id="0x0205"><uint16 value="0x0001" /></attribute></record>'}
 
     @dbus.service.signal(dbus_interface='org.bluez.Device', signature='sv')
     def PropertyChanged(self, key, value):
@@ -5460,25 +5395,25 @@ class TestBluetooth(unittest.TestCase, DBusUtil):
     @timeout(100)
     def testBluetoothTemplates(self):
         """TestBluetooth.testBluetoothTemplates - check for the bluetooth device's template"""
-        configs = self.server.GetConfigs(True, utf8_strings=True)
+        configs = self.server.GetConfigs(True)
         config = next((config for config in configs if config == bt_template), None)
-        self.failUnless(config)
+        self.assertTrue(config)
 
     @property("ENV", "DBUS_TEST_BLUETOOTH=session")
     @timeout(100)
     def testBluetoothNames(self):
         """TestBluetooth.testBluetoothNames - check that fingerPrint/peerName/deviceName/hardwareName are set correctly"""
         # This needs to be called before we can fetch the single config.
-        configs = self.server.GetConfigs(True, utf8_strings=True)
-        config  = self.server.GetConfig(bt_template, True, utf8_strings=True)
+        configs = self.server.GetConfigs(True)
+        config  = self.server.GetConfig(bt_template, True)
         # user-configurable name
-        self.failUnlessEqual(config['']["deviceName"], bt_name)
+        self.assertEqual(config['']["deviceName"], bt_name)
         # must not be set
         self.assertNotIn("peerName", config[''])
         # all of the possible strings in the template, must include the hardware name of this example device
-        self.failIf(string.find(config['']["fingerPrint"], bt_fingerprint) < 0)
+        self.assertIn(bt_fingerprint, config['']["fingerPrint"])
         # real hardware information
-        self.failUnlessEqual(config['']["hardwareName"], bt_fingerprint)
+        self.assertEqual(config['']["hardwareName"], bt_fingerprint)
 
 def createFiles(root, content, append = False):
     '''create directory hierarchy, overwriting previous content'''
@@ -5503,10 +5438,13 @@ def createFiles(root, content, append = False):
             mode = "w"
             if append:
                 mode = "a"
-            outfile = open(fullpath, mode)
+            if outfile is not None:
+                outfile.close()
+            outfile = open(fullpath, mode, encoding="utf-8")
             outname = newname
         outfile.write(line + "\n")
-    outfile.close()
+    if outfile is not None:
+        outfile.close()
 
 isPropRegEx = re.compile(r'^([a-zA-Z]+) = ')
 def isPropAssignment (line):
@@ -5539,19 +5477,19 @@ def scanFiles(root, peer = '', onlyProps = True, directory = ''):
                     newdir = entry
                 out += scanFiles(root, peer, onlyProps, newdir)
         else:
-            infile = open (fullEntry)
-            for line in infile:
-                line = line.rstrip("\r\n")
-                if (line):
-                    takeIt = False
-                    if (line.startswith("# ")):
-                        takeIt = isPropAssignment(line[2:])
-                    else:
-                        takeIt = True
-                    if (not onlyProps or takeIt):
-                        if (directory):
-                            out += directory + "/"
-                        out += entry + ':' + line + "\n"
+            with open(fullEntry) as infile:
+                for line in infile:
+                    line = line.rstrip("\r\n")
+                    if (line):
+                        takeIt = False
+                        if (line.startswith("# ")):
+                            takeIt = isPropAssignment(line[2:])
+                        else:
+                            takeIt = True
+                        if (not onlyProps or takeIt):
+                            if (directory):
+                                out += directory + "/"
+                            out += entry + ':' + line + "\n"
     return out
 
 def sortConfig(config):
@@ -5802,23 +5740,26 @@ class CmdlineUtil(DBusUtil):
                              env=cmdline_env)
         s.stdoutName = stdoutName
         s.stderrName = stderrName
+        stdout.close()
+        if stderr != subprocess.STDOUT:
+            stderr.close()
         return s
 
     def finishCmdline(self, s, expectSuccess=True, sessionFlags=['no-sync']):
         try:
             s.wait()
-        except Exception, ex:
+        except Exception as ex:
             message = str(ex)
             message = message + (s.stderrName and "\nStdout:\n" or "\nStdout + Stderr:\n")
-            message = message + open(s.stdoutName).read()
+            message = message + pathlib.Path(s.stdoutName).read_text(encoding="utf-8", errors="ignore")
             if s.stderrName:
                 message = message + "\nStderr:\n"
-                message = message + open(s.stderrName).read()
+                message = message + pathlib.Path(s.stderrName).read_text(encoding="utf-8", errors="ignore")
             raise Exception(message)
         s.wait()
-        out = open(s.stdoutName).read()
+        out = pathlib.Path(s.stdoutName).read_text(encoding="utf-8", errors="ignore")
         if s.stderrName:
-            err = open(s.stderrName).read()
+            err = pathlib.Path(s.stderrName).read_text(encoding="utf-8", errors="ignore")
         else:
             err = None
         doFail = False
@@ -5915,12 +5856,13 @@ class TestCmdline(CmdlineUtil, unittest.TestCase):
             prog = re.compile("^\s*static\s+const\s+int\s+{0}\s*=\s*(\d+);".format(versionName))
             found = False
             # will throw IOError if opening header fails
-            for line in open(header):
-                m = prog.match(line)
-                if m:
-                    TestCmdline.cachedVersions[versionName] = m.group(1)
-                    found = True
-                    break
+            with open(header) as input:
+                for line in input:
+                    m = prog.match(line)
+                    if m:
+                        TestCmdline.cachedVersions[versionName] = m.group(1)
+                        found = True
+                        break
             if not found:
                 self.fail(versionname + " not found in SyncConfig.h")
         return TestCmdline.cachedVersions[versionName]
@@ -6303,7 +6245,7 @@ spds/sources/todo/config.txt:# evolutionpassword =
         # test DBusUtil.assertEqualDiff()
         try:
             self.assertEqualDiff('foo\nbar\n', 'foo\nxxx\nbar\n')
-        except AssertionError, ex:
+        except AssertionError as ex:
             expected = '''differences between expected and actual text
 
   foo
@@ -6324,12 +6266,12 @@ spds/sources/todo/config.txt:# evolutionpassword =
         self.assertRegexpMatchesCustom('foo\nbar\nend', re.compile('^b.r$', re.MULTILINE))
         try:
             self.assertRegexpMatchesCustom('foo\nbar\nend', 'xxx')
-        except AssertionError, ex:
+        except AssertionError as ex:
             expected = '''text does not match regex\n\nText:\nfoo\nbar\nend\n\nRegex:\nxxx'''
             self.assertTrue(str(ex).endswith(expected), 'actual exception differs\n' + str(ex))
         else:
             self.fail('''DBusUtil.assertRegexpMatchesCustom() did not fail''')
-        self.assertRegexpMatches('foo\nbar\nend', 'bar')
+        self.assertRegex('foo\nbar\nend', 'bar')
 
         haystack = {'in': None}
 
@@ -6340,7 +6282,7 @@ spds/sources/todo/config.txt:# evolutionpassword =
 
         try:
             self.assertInCustom('in', 'outside')
-        except AssertionError, ex:
+        except AssertionError as ex:
             expected = "'in' not found in 'outside'"
             self.assertEqual(expected, str(ex))
         else:
@@ -6348,7 +6290,7 @@ spds/sources/todo/config.txt:# evolutionpassword =
 
         try:
             self.assertInCustom('out', haystack)
-        except AssertionError, ex:
+        except AssertionError as ex:
             expected = "'out' not found in '{'in': None}'"
             self.assertEqual(expected, str(ex))
         else:
@@ -6356,7 +6298,7 @@ spds/sources/todo/config.txt:# evolutionpassword =
 
         try:
             self.assertNotInCustom('in', 'inside')
-        except AssertionError, ex:
+        except AssertionError as ex:
             expected = "'in' found in 'inside'"
             self.assertEqual(expected, str(ex))
         else:
@@ -6364,7 +6306,7 @@ spds/sources/todo/config.txt:# evolutionpassword =
 
         try:
             self.assertNotInCustom('in', haystack)
-        except AssertionError, ex:
+        except AssertionError as ex:
             expected = "'in' found in '{'in': None}'"
             self.assertEqual(expected, str(ex))
         else:
@@ -6385,7 +6327,7 @@ spds/sources/todo/config.txt:# evolutionpassword =
                                          sessionFlags=None,
                                          expectSuccess=False)
         self.assertEqualDiff('[ERROR] --foo-bar: unknown parameter\n', stripOutput(err))
-        self.assertRegexpMatches(out, '^List and manipulate databases:\n')
+        self.assertRegex(out, '^List and manipulate databases:\n')
         self.assertEqual(1, code)
 
         # Run command without talking to server, joined streams.
@@ -6394,7 +6336,7 @@ spds/sources/todo/config.txt:# evolutionpassword =
                                          expectSuccess=False,
                                          preserveOutputOrder=True)
         self.assertEqual(err, None)
-        self.assertRegexpMatches(stripOutput(out), r'^List and manipulate databases:\n(.*\n)*\[ERROR\] --foo-bar: unknown parameter\n$')
+        self.assertRegex(stripOutput(out), r'^List and manipulate databases:\n(.*\n)*\[ERROR\] --foo-bar: unknown parameter\n$')
         self.assertEqual(1, code)
 
         peerMin = self.getPeerMinVersion()
@@ -6404,12 +6346,12 @@ spds/sources/todo/config.txt:# evolutionpassword =
         rootMin = self.getRootMinVersion()
         rootCur = self.getRootCurVersion()
 
-        self.assertRegexpMatches(peerMin, r'^\d+$', 'Peer min version is not a number.')
-        self.assertRegexpMatches(peerCur, r'^\d+$', 'Peer cur version is not a number.')
-        self.assertRegexpMatches(contextMin, r'^\d+$', 'Context min version is not a number.')
-        self.assertRegexpMatches(contextCur, r'^\d+$', 'Context cur version is not a number.')
-        self.assertRegexpMatches(rootMin, r'^\d+$', 'Peer min version is not a number.')
-        self.assertRegexpMatches(rootCur, r'^\d+$', 'Root cur version is not a number.')
+        self.assertRegex(peerMin, r'^\d+$', 'Peer min version is not a number.')
+        self.assertRegex(peerCur, r'^\d+$', 'Peer cur version is not a number.')
+        self.assertRegex(contextMin, r'^\d+$', 'Context min version is not a number.')
+        self.assertRegex(contextCur, r'^\d+$', 'Context cur version is not a number.')
+        self.assertRegex(rootMin, r'^\d+$', 'Peer min version is not a number.')
+        self.assertRegex(rootCur, r'^\d+$', 'Root cur version is not a number.')
 
     def assertSilent(self, out, err, ignore=None):
         if err != None and \
@@ -8033,20 +7975,20 @@ sources/memo/config.ini:type = todo
                                          expectSuccess = False)
         # Information about supported modules is optional, depends on compilation of
         # SyncEvolution.
-        self.assertRegexpMatches(err, r'''\[ERROR\] error code from SyncEvolution error parsing config file \(local, status 20010\): bar: backend not supported (by any of the backend modules \((\S+, )+\S+\) )?or not correctly configured \(backend=select backend databaseFormat= syncFormat=\)\n\[ERROR\] configuration 'foo' does not exist\n\[ERROR\] datastore 'bar' does not exist\n\[ERROR\] backend property not set\n''')
+        self.assertRegex(err, r'''\[ERROR\] error code from SyncEvolution error parsing config file \(local, status 20010\): bar: backend not supported (by any of the backend modules \((\S+, )+\S+\) )?or not correctly configured \(backend=select backend databaseFormat= syncFormat=\)\n\[ERROR\] configuration 'foo' does not exist\n\[ERROR\] datastore 'bar' does not exist\n\[ERROR\] backend property not set\n''')
         self.assertEqualDiff('', out)
 
         # "foo" not configured, no source named
         out, err, code  = self.runCmdline(["--print-items",
                                            "foo"],
                                           expectSuccess = False)
-        self.assertRegexpMatches(err, r'''\[ERROR\] error code from SyncEvolution error parsing config file \(local, status 20010\): backend not supported (by any of the backend modules \((\S+, )+\S+\) )?or not correctly configured \(backend=select backend databaseFormat= syncFormat=\)\n\[ERROR\] configuration 'foo' does not exist\n\[ERROR\] no datastore selected\n\[ERROR\] backend property not set\n''')
+        self.assertRegex(err, r'''\[ERROR\] error code from SyncEvolution error parsing config file \(local, status 20010\): backend not supported (by any of the backend modules \((\S+, )+\S+\) )?or not correctly configured \(backend=select backend databaseFormat= syncFormat=\)\n\[ERROR\] configuration 'foo' does not exist\n\[ERROR\] no datastore selected\n\[ERROR\] backend property not set\n''')
         self.assertEqualDiff('', out)
 
         # nothing known about source
         out, err, code = self.runCmdline(["--print-items"],
                                          expectSuccess = False)
-        self.assertRegexpMatches(err, r'''\[ERROR\] error code from SyncEvolution error parsing config file \(local, status 20010\): backend not supported (by any of the backend modules \((\S+, )+\S+\) )?or not correctly configured \(backend=select backend databaseFormat= syncFormat=\)\n\[ERROR\] no datastore selected\n\[ERROR\] backend property not set\n''')
+        self.assertRegex(err, r'''\[ERROR\] error code from SyncEvolution error parsing config file \(local, status 20010\): backend not supported (by any of the backend modules \((\S+, )+\S+\) )?or not correctly configured \(backend=select backend databaseFormat= syncFormat=\)\n\[ERROR\] no datastore selected\n\[ERROR\] backend property not set\n''')
         self.assertEqualDiff('', out)
 
         # now create "foo"
@@ -8059,7 +8001,7 @@ sources/memo/config.ini:type = todo
         out, err, code  = self.runCmdline(["--print-items",
                                            "foo"],
                                           expectSuccess = False)
-        self.assertRegexpMatches(err, r'''\[ERROR\] error code from SyncEvolution error parsing config file \(local, status 20010\): backend not supported (by any of the backend modules \((\S+, )+\S+\) )?or not correctly configured \(backend=select backend databaseFormat= syncFormat=\)\n\[ERROR\] no datastore selected\n\[ERROR\] backend property not set\n''')
+        self.assertRegex(err, r'''\[ERROR\] error code from SyncEvolution error parsing config file \(local, status 20010\): backend not supported (by any of the backend modules \((\S+, )+\S+\) )?or not correctly configured \(backend=select backend databaseFormat= syncFormat=\)\n\[ERROR\] no datastore selected\n\[ERROR\] backend property not set\n''')
         self.assertEqualDiff('', out)
 
         # "foo" configured, but "bar" is not
@@ -8067,7 +8009,7 @@ sources/memo/config.ini:type = todo
                                           "foo",
                                           "bar"],
                                          expectSuccess = False)
-        self.assertRegexpMatches(err, r'''\[ERROR\] error code from SyncEvolution error parsing config file \(local, status 20010\): bar: backend not supported (by any of the backend modules \((\S+, )+\S+\) )?or not correctly configured \(backend=select backend databaseFormat= syncFormat=\)\n\[ERROR\] datastore 'bar' does not exist\n\[ERROR\] backend property not set\n''')
+        self.assertRegex(err, r'''\[ERROR\] error code from SyncEvolution error parsing config file \(local, status 20010\): bar: backend not supported (by any of the backend modules \((\S+, )+\S+\) )?or not correctly configured \(backend=select backend databaseFormat= syncFormat=\)\n\[ERROR\] datastore 'bar' does not exist\n\[ERROR\] backend property not set\n''')
         self.assertEqualDiff('', out)
 
         # add "bar" source, using file backend
@@ -8141,7 +8083,7 @@ END:VCARD
         out, err, code = self.runCmdline(["--export", exportfile,
                                           "foo", "bar"])
         self.assertNoErrors(err)
-        self.assertEqualDiff(john + "\n" + joan, open(exportfile).read())
+        self.assertEqualDiff(john + "\n" + joan, pathlib.Path(exportfile).read_text(encoding="utf-8", errors="ignore"))
 
         # export one
         out, err, code = self.runCmdline(["--export", "-",
@@ -8163,7 +8105,7 @@ END:VCARD
         out, err, code = self.runCmdline(["--export", exportfile,
                                           "foo", "bar", "1"])
         self.assertNoErrors(err)
-        self.assertEqualDiff(john, open(exportfile).read())
+        self.assertEqualDiff(john, pathlib.Path(exportfile).read_text(encoding="utf-8", errors="ignore"))
 
         # Copied from C++ test:
         # TODO: check configuration of just the source as @foo bar
@@ -8235,7 +8177,7 @@ END:VCARD
         def output(path, level, text, procname):
             if self.running and not self.killed and procname == '' and text == 'ready to sync':
                 # kill syncevo-local-sync
-                for pid, (name, cmdline) in self.getChildren().iteritems():
+                for pid, (name, cmdline) in self.getChildren().items():
                     if 'syncevo-dbus-helper' in cmdline:
                         logging.printf('killing syncevo-dbus-helper with pid %d', pid)
                         os.kill(pid, signal.SIGKILL)
@@ -8247,8 +8189,7 @@ END:VCARD
                                            'LogOutput',
                                            'org.syncevolution.Server',
                                            self.server.bus_name,
-                                           byte_arrays=True,
-                                           utf8_strings=True)
+                                           byte_arrays=True)
         try:
             s = self.startCmdline(["--sync", "slow", "server"], preserveOutputOrder=True)
             loop.run()
@@ -8284,7 +8225,7 @@ END:VCARD
         def output(path, level, text, procname):
             if self.running and not self.killed and procname == 'remote@client' and text == 'target side of local sync ready':
                 # kill syncevo-local-sync
-                for pid, (name, cmdline) in self.getChildren().iteritems():
+                for pid, (name, cmdline) in self.getChildren().items():
                     if 'syncevo-local-sync' in cmdline:
                         logging.printf('killing syncevo-local-sync with pid %d', pid)
                         os.kill(pid, signal.SIGKILL)
@@ -8296,8 +8237,7 @@ END:VCARD
                                            'LogOutput',
                                            'org.syncevolution.Server',
                                            self.server.bus_name,
-                                           byte_arrays=True, 
-                                           utf8_strings=True)
+                                           byte_arrays=True)
         try:
             s = self.startCmdline(["--sync", "slow", "server"], preserveOutputOrder=True)
             loop.run()
@@ -8395,8 +8335,7 @@ First ERROR encountered: sending message to child failed: The connection is clos
                                            'LogOutput',
                                            'org.syncevolution.Server',
                                            self.server.bus_name,
-                                           byte_arrays=True,
-                                           utf8_strings=True)
+                                           byte_arrays=True)
         try:
             s = self.startCmdline(["--sync", "slow", "server"], preserveOutputOrder=True)
             loop.run()
@@ -8423,13 +8362,11 @@ First ERROR encountered: sending message to child failed: The connection is clos
         self.session.Detach()
         os.makedirs(xdg_root + "/server")
         item = xdg_root + "/server/0"
-        output = open(item, "w")
-        output.write('''BEGIN:VCARD
+        pathlib.Path(item).write_bytes(rb'''BEGIN:VCARD
 VERSION:3.0
 FN:John Doe
 N:Doe;John
 END:VCARD''')
-        output.close()
         numSyncs = 0
 
         out, err, code = self.runCmdline(["--sync", "slow", "server"],
@@ -8516,7 +8453,7 @@ no changes
         # (1 out of 0 items sent?!). This information comes straight
         # from libsynthesis; use it as it is for now.
         self.collectEvents()
-        self.assertRegexpMatches(self.prettyPrintEvents(),
+        self.assertRegex(self.prettyPrintEvents(),
                                  r'''status: idle, .*
 (.*\n)+status: running;waiting, 0, \{addressbook: \(slow, running, 0\)\}
 (.*\n)*progress: 100, \{addressbook: \(sending, -1, -1, 1, 0, -1, -1\)\}
@@ -8525,8 +8462,7 @@ no changes
         self.checkSync(numReports=numSyncs)
 
         # check result (should be unchanged)
-        input = open(item, "r")
-        self.assertIn("FN:John Doe", input.read())
+        self.assertIn("FN:John Doe", pathlib.Path(item).read_text(encoding="utf-8", errors="ignore"))
 
         # no changes
         out, err, code = self.runCmdline(["server"],
@@ -8596,7 +8532,7 @@ no changes
 
 ''', out)
         self.collectEvents()
-        self.assertRegexpMatches(self.prettyPrintEvents(),
+        self.assertRegex(self.prettyPrintEvents(),
                                  r'''status: idle, .*
 (.*\n)+status: running;waiting, 0, \{addressbook: \(two-way, running, 0\)\}
 (.*\n)*progress: 100, \{addressbook: \(, -1, -1, -1, -1, -1, -1\)\}
@@ -8655,7 +8591,7 @@ Changes applied during synchronization:
 +---------------+-----+-----+-----+-----+-----+-----+-----+-----+-----+
 ''', out)
         self.collectEvents()
-        self.assertRegexpMatches(self.prettyPrintEvents(),
+        self.assertRegex(self.prettyPrintEvents(),
                                  r'''status: idle, .*
 (.*\n)+status: running;waiting, 0, \{addressbook: \(two-way, running, 0\)\}
 (.*\n)*progress: 100, \{addressbook: \(, -1, -1, -1, -1, -1, -1\)\}
@@ -8734,7 +8670,7 @@ no changes
 
 ''', out)
         self.collectEvents()
-        self.assertRegexpMatches(self.prettyPrintEvents(),
+        self.assertRegex(self.prettyPrintEvents(),
                                  r'''status: idle, .*
 (.*\n)+status: running;waiting, 0, \{addressbook: \(two-way, running, 0\)\}
 (.*\n)*progress: 100, \{addressbook: \(, -1, -1, -1, -1, -1, -1\)\}
@@ -8745,13 +8681,11 @@ no changes
         self.assertEqual(before, after)
 
         # update contact
-        output = open(item, "w")
-        output.write('''BEGIN:VCARD
+        pathlib.Path(item).write_bytes(rb'''BEGIN:VCARD
 VERSION:3.0
 FN:Joan Doe
 N:Doe;Joan
 END:VCARD''')
-        output.close()
         out, err, code = self.runCmdline(["server"],
                                          sessionFlags=[],
                                          preserveOutputOrder=True)
@@ -8840,7 +8774,7 @@ no changes
 
 ''', out)
         self.collectEvents()
-        self.assertRegexpMatches(self.prettyPrintEvents(),
+        self.assertRegex(self.prettyPrintEvents(),
                                  r'''status: idle, .*
 (.*\n)+status: running;waiting, 0, \{addressbook: \(two-way, running, 0\)\}
 (.*\n)*progress: 100, \{addressbook: \(sending, -1, -1, 1, 0, -1, -1\)\}
@@ -8938,7 +8872,7 @@ no changes
 
 ''', out)
         self.collectEvents()
-        self.assertRegexpMatches(self.prettyPrintEvents(),
+        self.assertRegex(self.prettyPrintEvents(),
                                  r'''status: idle, .*
 (.*\n)+status: running;waiting, 0, \{addressbook: \(two-way, running, 0\)\}
 (.*\n)*progress: 100, \{addressbook: \(sending, -1, -1, 1, 0, -1, -1\)\}
@@ -8954,13 +8888,11 @@ no changes
         self.session.Detach()
         os.makedirs(xdg_root + "/server")
         item = xdg_root + "/server/0"
-        output = open(item, "w")
-        output.write('''BEGIN:VCARD
+        pathlib.Path(item).write_bytes(rb'''BEGIN:VCARD
 VERSION:3.0
 FN:John Doe
 N:Doe;John
 END:VCARD''')
-        output.close()
 
         out, err, code = self.runCmdline(["--sync", "slow", "server"],
                                          sessionFlags=[],
@@ -9067,7 +8999,7 @@ no changes
 
 ''', out)
         self.collectEvents()
-        self.assertRegexpMatches(self.prettyPrintEvents(),
+        self.assertRegex(self.prettyPrintEvents(),
                                  r'''status: idle, .*
 (.*\n)+status: running;waiting, 0, \{addressbook: \(slow, running, 0\), calendar: \(slow, running, 0\)\}
 (.*\n)*progress: 100, \{addressbook: \(sending, -1, -1, 1, 0, -1, -1\), calendar: \(, -1, -1, -1, -1, -1, -1\)\}
@@ -9075,8 +9007,7 @@ no changes
         self.checkSync(numReports=1)
 
         # check result (should be unchanged)
-        input = open(item, "r")
-        self.assertIn("FN:John Doe", input.read())
+        self.assertIn("FN:John Doe", pathlib.Path(item).read_text(encoding="utf-8", errors="ignore"))
 
         # no changes
         out, err, code = self.runCmdline(["server"],
@@ -9172,7 +9103,7 @@ no changes
 
 ''', out)
         self.collectEvents()
-        self.assertRegexpMatches(self.prettyPrintEvents(),
+        self.assertRegex(self.prettyPrintEvents(),
                                  r'''status: idle, .*
 (.*\n)+status: running;waiting, 0, \{addressbook: \(two-way, running, 0\), calendar: \(two-way, running, 0\)\}
 (.*\n)*progress: 100, \{addressbook: \(, -1, -1, -1, -1, -1, -1\), calendar: \(, -1, -1, -1, -1, -1, -1\)\}
@@ -9180,13 +9111,11 @@ no changes
         self.checkSync(numReports=2)
 
         # update contact
-        output = open(item, "w")
-        output.write('''BEGIN:VCARD
+        pathlib.Path(item).write_bytes(rb'''BEGIN:VCARD
 VERSION:3.0
 FN:Joan Doe
 N:Doe;Joan
 END:VCARD''')
-        output.close()
         out, err, code = self.runCmdline(["server"],
                                          sessionFlags=[],
                                          preserveOutputOrder=True)
@@ -9301,7 +9230,7 @@ no changes
 
 ''', out)
         self.collectEvents()
-        self.assertRegexpMatches(self.prettyPrintEvents(),
+        self.assertRegex(self.prettyPrintEvents(),
                                  r'''status: idle, .*
 (.*\n)+status: running;waiting, 0, \{addressbook: \(two-way, running, 0\), calendar: \(two-way, running, 0\)\}
 (.*\n)*progress: 100, \{addressbook: \(sending, -1, -1, 1, 0, -1, -1\), calendar: \(, -1, -1, -1, -1, -1, -1\)\}
@@ -9424,7 +9353,7 @@ no changes
 
 ''', out)
         self.collectEvents()
-        self.assertRegexpMatches(self.prettyPrintEvents(),
+        self.assertRegex(self.prettyPrintEvents(),
                                  r'''status: idle, .*
 (.*\n)+status: running;waiting, 0, \{addressbook: \(two-way, running, 0\), calendar: \(two-way, running, 0\)\}
 (.*\n)*progress: 100, \{addressbook: \(sending, -1, -1, 1, 0, -1, -1\), calendar: \(, -1, -1, -1, -1, -1, -1\)\}
@@ -9501,7 +9430,7 @@ no changes
 
 ''', out)
         self.collectEvents()
-        self.assertRegexpMatches(self.prettyPrintEvents(),
+        self.assertRegex(self.prettyPrintEvents(),
                                  r'''status: idle, .*
 (.*\n)+status: running;waiting, 0, \{addressbook: \(two-way, running, 0\), calendar: \(none, idle, 0\)\}
 (.*\n)*progress: 100, \{addressbook: \(, -1, -1, -1, -1, -1, -1\), calendar: \(, -1, -1, -1, -1, -1, -1\)\}
@@ -9516,30 +9445,24 @@ no changes
         self.session.Detach()
         os.makedirs(xdg_root + "/server")
         item = xdg_root + "/server/0"
-        output = open(item, "w")
-        output.write('''BEGIN:VCARD
+        pathlib.Path(item).write_bytes(b'''BEGIN:VCARD
 VERSION:3.0
 FN:John\377 Doe
 N:Doe;John\377
 END:VCARD''')
-        output.close()
         os.makedirs(xdg_root + "/client")
         item = xdg_root + "/client/0"
-        output = open(item, "w")
-        output.write('''BEGIN:VCARD
+        pathlib.Path(item).write_bytes(b'''BEGIN:VCARD
 VERSION:3.0
 FN:Joan Doe\377
 N:Doe\377;Joan
 END:VCARD''')
-        output.close()
         item = xdg_root + "/client/1"
-        output = open(item, "w")
-        output.write('''BEGIN:VCARD
+        pathlib.Path(item).write_bytes(b'''BEGIN:VCARD
 VERSION:3.0
 FN:J\377\377 D'Arc\377
 N:D'Arc\377;J\377\377
 END:VCARD''')
-        output.close()
 
         out, err, code = self.runCmdline(["--sync", "slow", "server"],
                                          sessionFlags=[],
@@ -9652,20 +9575,22 @@ class TestHTTP(CmdlineUtil, unittest.TestCase):
         '''Pick port dynamically by running syncevo-http-server with port 0 and parsing its output.'''
         logname = self.testname + '.syncevo-http-server.log'
         self.additional_logs.append(logname)
-        self.httpserver = subprocess.Popen(['syncevo-http-server', '-d', 'http://127.0.0.1:0'],
-                                           stdout=open(logname, 'w'),
-                                           stderr=subprocess.STDOUT)
+        with open(logname, 'w') as stdout:
+            self.httpserver = subprocess.Popen(['syncevo-http-server', '-d', 'http://127.0.0.1:0'],
+                                               stdout=stdout,
+                                               stderr=subprocess.STDOUT)
         self.port = 0
         while self.port == 0:
             res = self.httpserver.poll()
             if self.httpserver.poll() != None:
                 self.fail('syncevo-http-server failed to start, return code %d' % res)
             regex = re.compile(r'listening on port (\d+)')
-            for line in open(logname, 'r'):
-                m = regex.search(line)
-                if m:
-                    self.port = int(m.group(1))
-                    break
+            with open(logname, 'r') as input:
+                for line in input:
+                    m = regex.search(line)
+                    if m:
+                        self.port = int(m.group(1))
+                        break
             time.sleep(0.1)
         return self.port
 
@@ -9856,8 +9781,7 @@ class TestHTTP(CmdlineUtil, unittest.TestCase):
                                          'org.syncevolution.Server',
                                          self.server.bus_name,
                                          None,
-                                         byte_arrays=True,
-                                         utf8_strings=True)
+                                         byte_arrays=True)
 
         s = self.startCmdline(["--sync", "slow", "--daemon=no", "client"],
                               preserveOutputOrder=True)

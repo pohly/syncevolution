@@ -1,4 +1,4 @@
-#!@PYTHON@
+#!/usr/bin/python3
 
 """
 Converts the .log output for a client-test test into HTML, with
@@ -13,7 +13,7 @@ filename = sys.argv[1]
 if filename == '-':
     log = sys.stdin
 else:
-    log = open(filename)
+    log = open(filename, encoding='utf-8')
 
 out = sys.stdout
 
