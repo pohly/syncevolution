@@ -676,11 +676,13 @@ class GitCheckout(GitCheckoutBase, Action):
         else:
             cmd = "git clone %s %s && chmod -R g+w %s && cd %s && git config core.sharedRepository group " % (self.url, self.basedir, self.basedir, self.basedir)
         context.runCommand(cmd)
-        context.runCommand("set -x; cd %(dir)s && git show-ref &&"
+        context.runCommand("cd %(dir)s && git show-ref &&"
                            "((git tag -l | grep -w -q %(rev)s) && git checkout %(rev)s ||"
                            "((git branch -l | grep -w -q %(rev)s) && git checkout %(rev)s || git checkout -b %(rev)s origin/%(rev)s) && git merge origin/%(rev)s)" %
                            {"dir": self.basedir,
                             "rev": self.revision},
+                           dumpCommands=True,
+                           jobs=None,
                            runAsIs=True)
         cd(self.basedir)
         if os.access("autogen.sh", os.F_OK):
@@ -749,7 +751,7 @@ class GitCopy(GitCheckoutBase, Action):
                 '( git status | grep -q "working directory clean" && echo "working directory clean" || ( echo "working directory dirty" && ( echo From: nightly testing ; echo Subject: [PATCH 1/1] uncommitted changes ; echo ; git status; echo; git diff HEAD ) >../%(name)s-1000-unstaged.patch ) ) >>%(patchlog)s'
                 ]) % self
 
-        context.runCommand(cmd, dumpCommands=True, runAsIs=True)
+        context.runCommand(cmd, dumpCommands=True, runAsIs=True, jobs=None)
         if os.access("autogen.sh", os.F_OK):
             context.runCommand("%s ./autogen.sh" % (self.runner))
 
