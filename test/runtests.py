@@ -1,4 +1,4 @@
-#!/usr/bin/python -u
+#!/usr/bin/python3 -u
 
 """
 The general idea is that tests to run are defined as a list of
@@ -13,7 +13,7 @@ the result of each action:
   that the action can put there
 """
 
-import os, sys, popen2, traceback, re, time, smtplib, optparse, stat, shutil, StringIO, MimeWriter
+import os, sys, traceback, re, time, smtplib, optparse, stat, shutil, io
 import shlex
 import subprocess
 import fnmatch
@@ -21,11 +21,22 @@ import copy
 import errno
 import signal
 import stat
-import exceptions
+
+class Unbuffered(object):
+   def __init__(self, stream):
+       self.stream = stream
+   def write(self, data):
+       self.stream.write(data)
+       self.stream.flush()
+   def writelines(self, datas):
+       self.stream.writelines(datas)
+       self.stream.flush()
+   def __getattr__(self, attr):
+       return getattr(self.stream, attr)
 
 def log(format, *args):
     now = time.time()
-    print 'runtests.py-%d' % os.getpid(), time.asctime(time.gmtime(now)), 'UTC', '(+ %.1fs / %.1fs)' % (now - log.latest, now - log.start), format % args
+    print('runtests.py-%d' % os.getpid(), time.asctime(time.gmtime(now)), 'UTC', '(+ %.1fs / %.1fs)' % (now - log.latest, now - log.start), format % args)
     log.latest = now
 log.start = time.time()
 log.latest = log.start
@@ -77,7 +88,7 @@ def del_dir(path):
     # We might have skipped deleting something, allow that.
     try:
         os.rmdir(path)
-    except OSError, ex:
+    except OSError as ex:
         if ex.errno != errno.ENOTEMPTY:
             raise
 
@@ -108,9 +119,9 @@ def copyLog(filename, dirname, htaccess, lineFilter=None):
         outname = outname + ".gz"
         out = gzip.open(outname, "wb")
     else:
-        out = file(outname, "w")
+        out = open(outname, "w", encoding="utf-8")
     error = None
-    for line in file(filename, "r").readlines():
+    for line in open(filename, "r", encoding="utf-8").readlines():
         if not error and line.find("ERROR") >= 0:
             error = line
         if lineFilter:
@@ -128,7 +139,7 @@ def copyLog(filename, dirname, htaccess, lineFilter=None):
 def TryKill(pid, signal):
     try:
         os.kill(pid, signal)
-    except OSError, ex:
+    except OSError as ex:
         # might have quit in the meantime, deal with the race
         # condition
         if ex.errno != 3:
@@ -205,7 +216,7 @@ class Jobserver:
     def _unblock(self):
         '''Unblock signals if blocked and we currently own no slots.'''
         if self.blocked and not self.allocated:
-            for sig, handler in self.blocked.items():
+            for sig, handler in list(self.blocked.items()):
                 signal.signal(sig, handler)
             self.blocked = {}
 
@@ -269,7 +280,7 @@ class Action:
                         fd = os.open("output.txt", os.O_WRONLY|os.O_CREAT|os.O_APPEND)
                         os.dup2(fd, 1)
                         os.dup2(fd, 2)
-                        sys.stdout = os.fdopen(fd, "w", 0) # unbuffered output!
+                        sys.stdout = Unbuffered(os.fdopen(fd, "w"))
                         sys.stderr = sys.stdout
                     if self.needhome and context.home_template:
                         # Clone home directory template?
@@ -292,7 +303,7 @@ class Action:
                 if self.needhome and not context.home_template:
                     self.wait_for_completion()
 
-        except Exception, inst:
+        except Exception as inst:
             # fork() error handling in parent.
             traceback.print_exc()
             self.status = Action.FAILED
@@ -320,7 +331,7 @@ class Context:
 
     def __init__(self, tmpdir, resultdir, uri, workdir, mailtitle, sender, recipients, mailhost, enabled, skip, nologs, setupcmd, make, sanitychecks, lastresultdir, datadir):
         # preserve normal stdout because stdout/stderr will be redirected
-        self.out = os.fdopen(os.dup(1), "w", 0) # unbuffered
+        self.out = Unbuffered(os.fdopen(os.dup(1), "w"))
         self.todo = []
         self.actions = {}
         self.tmpdir = abspath(tmpdir)
@@ -380,7 +391,7 @@ class Context:
             cmd.insert(0, 'env')
 
         if not runAsIs:
-            cmdstr = " ".join(map(lambda x: (' ' in x or '(' in x or '\\' in x or x == '') and ("'" in x and '"%s"' or "'%s'") % x or x, cmd))
+            cmdstr = " ".join([(' ' in x or '(' in x or '\\' in x or x == '') and ("'" in x and '"%s"' or "'%s'") % x or x for x in cmd])
         if dumpCommands:
             cmdstr = "set -x; " + cmdstr
 
@@ -491,7 +502,7 @@ class Context:
                             run_servers.append(action.name);
                         action.tryexecution(step, not self.nologs)
                         started.append(action)
-            except Exception, inst:
+            except Exception as inst:
                 traceback.print_exc()
                 self.summary.append("%s failed: %s" % (action.name, inst))
 
@@ -510,7 +521,7 @@ class Context:
         s.close()
 
         # copy information about sources
-        for source in self.actions.keys():
+        for source in list(self.actions.keys()):
             action = self.actions[source]
             basedir = getattr(action, 'basedir', None)
             if basedir and os.path.isdir(basedir):
@@ -576,9 +587,11 @@ class Context:
             sys.exit(1)
 
     def startEmail(self):
-        if self.recipients:
+        # TODO: enable sending of mails again, using
+        # email package instead of MimeWriter.
+        if False and self.recipients:
             server = smtplib.SMTP(self.mailhost)
-            body = StringIO.StringIO()
+            body = io.StringIO()
             writer = MimeWriter.MimeWriter (body)
             writer.addheader("From", self.sender)
             for recipient in self.recipients:
@@ -749,7 +762,7 @@ class GitCopy(GitCheckoutBase, Action):
                 '(cd ..; for i in [0-9]*.patch; do [ ! -f "$i" ] || mv $i %(name)s-$i; done)',
                 'git describe --tags --always nightly | sed -e "s/\(.*\)-\([0-9][0-9]*\)-g\(.*\)/\\1 + \\2 commit(s) = \\3/" >>%(patchlog)s',
                 '( git status | grep -q "working directory clean" && echo "working directory clean" || ( echo "working directory dirty" && ( echo From: nightly testing ; echo Subject: [PATCH 1/1] uncommitted changes ; echo ; git status; echo; git diff HEAD ) >../%(name)s-1000-unstaged.patch ) ) >>%(patchlog)s'
-                ]) % self
+                ]) % self.__dict__
 
         context.runCommand(cmd, dumpCommands=True, runAsIs=True, jobs=None)
         if os.access("autogen.sh", os.F_OK):
@@ -918,7 +931,7 @@ class SyncEvolutionTest(Action):
         finally:
             tocopy = re.compile(r'.*\.txt|.*\.log|.*\.client.[AB]|.*\.(cpp|h|c)\.html|.*\.txt\.html|.*\.log.html')
             toconvert = re.compile(r'Client_.*\.txt')
-            htaccess = file(os.path.join(resdir, ".htaccess"), "a")
+            htaccess = open(os.path.join(resdir, ".htaccess"), "a", encoding="utf-8")
             for f in os.listdir(actiondir):
                 if tocopy.match(f):
                     error = copyLog(f, resdir, htaccess, self.lineFilter)
@@ -1092,7 +1105,7 @@ class EvoSvn(Action):
         makeoptions contain additional parameters for make (like BRANCH=2.20 PREFIX=/tmp/runtests/evo)."""
         Action.__init__(self,name)
         self.workdir = workdir
-	self.resultdir = resultdir
+        self.resultdir = resultdir
         self.makedir = makedir
         self.makeoptions = makeoptions
 
@@ -1103,9 +1116,9 @@ class EvoSvn(Action):
         if os.access(self.resultdir, os.F_OK):
             shutil.rmtree(self.resultdir)
         os.system("rm -f .stamp/*.install")
-	localmk = open("local.mk", "a")
-	localmk.write("PREFIX := %s\n" % self.resultdir)
-	localmk.close()
+        localmk = open("local.mk", "a")
+        localmk.write("PREFIX := %s\n" % self.resultdir)
+        localmk.close()
         if os.access(".stamp", os.F_OK):
             context.runCommand("make check-changelog")
         context.runCommand("%s %s" % (context.make, self.makeoptions))
@@ -1114,7 +1127,7 @@ for evosvn in options.evosvn:
     name, path = evosvn.split("=")
     evosvn = EvoSvn("evolution" + name,
                     os.path.join(options.tmpdir, "evolution%s-build" % name),
-		    os.path.join(options.tmpdir, "evolution%s-result" % name),
+                    os.path.join(options.tmpdir, "evolution%s-result" % name),
                     path,
                     "SUDO=true")
     context.add(evosvn)
@@ -1552,7 +1565,7 @@ localtests.append(test)
 context.add(test)
 
 # Implement the mapping from "evolution" to the new test names.
-if enabled.has_key("evolution"):
+if "evolution" in enabled:
     if enabled["evolution"] is None:
         # Everything is enabled.
         for test in localtests:
@@ -1570,7 +1583,7 @@ if enabled.has_key("evolution"):
                         if defTest.startswith(e):
                             localtestsEnabled.setdefault(localtest.name, []).append(e)
                             break
-        for name, e in localtestsEnabled.iteritems():
+        for name, e in localtestsEnabled.items():
             enabled[name] = ','.join(e)
 
 # test-dbus.py itself doesn't need to run under valgrind, remove it...
@@ -2510,13 +2523,13 @@ context.add(ovitest)
 
 if options.list:
     for action in context.todo:
-        print action.name
+        print(action.name)
 else:
     pid = os.getpid()
     log('Ready to run. I have PID %d.', pid)
     try:
         context.execute()
-    except exceptions.SystemExit:
+    except SystemExit:
         raise
     except:
         # Something went wrong. Send emergency email if an email is
