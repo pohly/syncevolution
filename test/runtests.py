@@ -675,7 +675,7 @@ class GitCheckout(GitCheckoutBase, Action):
             cmd = "cd %s && git fetch" % (self.basedir)
         else:
             cmd = "git clone %s %s && chmod -R g+w %s && cd %s && git config core.sharedRepository group " % (self.url, self.basedir, self.basedir, self.basedir)
-        context.runCommand(cmd)
+        context.runCommand(cmd, jobs=None)
         context.runCommand("cd %(dir)s && git show-ref &&"
                            "((git tag -l | grep -w -q %(rev)s) && git checkout %(rev)s ||"
                            "((git branch -l | grep -w -q %(rev)s) && git checkout %(rev)s || git checkout -b %(rev)s origin/%(rev)s) && git merge origin/%(rev)s)" %
@@ -686,7 +686,7 @@ class GitCheckout(GitCheckoutBase, Action):
                            runAsIs=True)
         cd(self.basedir)
         if os.access("autogen.sh", os.F_OK):
-            context.runCommand("%s ./autogen.sh" % (self.runner))
+            context.runCommand("%s ./autogen.sh" % (self.runner), jobs=None)
 
 class GitCopy(GitCheckoutBase, Action):
     """Copy existing git repository and update it to the requested
