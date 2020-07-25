@@ -176,6 +176,7 @@ deb rpm : checkinstall/dist/$(distdir) checkinstall/dist/debian/control
 		$(TYPE_$@) \
 		$(REQUIRES_$@) \
 		--fstrans=yes \
+		--install=no \
 		--strip=no \
 		--pkgversion=$(VERSION_$@) \
 		--pkgrelease=$(RELEASE) \
