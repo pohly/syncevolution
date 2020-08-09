@@ -15,11 +15,21 @@ $anymissing"
 
 dnl check for Evolution packages
 PKG_CHECK_MODULES(EPACKAGE, libedataserver-1.2, EDSFOUND=yes, [EDSFOUND=no])
-PKG_CHECK_MODULES(ECAL, libecal-1.2, ECALFOUND=yes, [ECALFOUND=no])
+PKG_CHECK_MODULES(ECAL, libecal-2.0, ECALFOUND=yes, [ECALFOUND=no])
 PKG_CHECK_MODULES(EBOOK, libebook-1.2, EBOOKFOUND=yes, [EBOOKFOUND=no])
+
+if test "$ECALFOUND" = "yes"; then
+        AC_DEFINE(HAVE_LIBECAL_2_0, 1, [libecal 2.0])
+else
+        PKG_CHECK_MODULES(ECAL, libecal-1.2, ECALFOUND=yes, [ECALFOUND=no])
+fi
 
 PKG_CHECK_MODULES(EBOOK_VERSION, [libebook-1.2 >= 3.3],
                   [AC_DEFINE(HAVE_E_CONTACT_INLINE_LOCAL_PHOTOS, 1, [have e_contact_inline_local_photos()])],
+                  [true])
+
+PKG_CHECK_MODULES(EBOOK_VERSION_3_33, [libebook-1.2 >= 3.33.2],
+                  [AC_DEFINE(HAVE_E_BOOK_OPERATION_FLAGS, 1, [have EBookOperationFlags])],
                   [true])
 
 SE_ARG_ENABLE_BACKEND(ebook, evolution,

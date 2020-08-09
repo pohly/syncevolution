@@ -414,7 +414,11 @@ gboolean e_cal_check_timezones(icalcomponent *comp,
     goto done;
  nomem:
     /* set gerror for "out of memory" if possible, otherwise abort via g_error() */
+#ifdef HAVE_LIBECAL_2_0
+    *error = g_error_new(E_CLIENT_ERROR, E_CLIENT_ERROR_OTHER_ERROR, "out of memory");
+#else
     *error = g_error_new(E_CALENDAR_ERROR, E_CALENDAR_STATUS_OTHER_ERROR, "out of memory");
+#endif
     if (!*error) {
         g_error("e_cal_check_timezones(): out of memory, cannot proceed - sorry!");
     }
@@ -451,6 +455,10 @@ icaltimezone *e_cal_tzlookup_ecal(const char *tzid,
                                   const void *custom,
                                   GError **error)
 {
+#ifdef HAVE_LIBECAL_2_0
+    g_propagate_error(error, e_client_error_create(E_CLIENT_ERROR_NOT_SUPPORTED, NULL));
+    return NULL;
+#else
     ECal *ecal = (ECal *)custom;
     icaltimezone *zone = NULL;
 
@@ -470,6 +478,7 @@ icaltimezone *e_cal_tzlookup_ecal(const char *tzid,
         }
         return NULL;
     }
+#endif
 }
 
 /**

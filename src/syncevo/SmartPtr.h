@@ -73,6 +73,12 @@ class Unref {
     static void unref(icalproperty *pointer) { icalproperty_free(pointer); }
     static void unref(icalparameter *pointer) { icalparameter_free(pointer); }
     static void unref(icaltimezone *pointer) { icaltimezone_free(pointer, 1); }
+#ifdef HAVE_LIBECAL_2_0
+    static void unref(ICalComponent *pointer) { g_clear_object(&pointer); }
+    static void unref(ICalProperty *pointer) { g_clear_object(&pointer); }
+    static void unref(ICalParameter *pointer) { g_clear_object(&pointer); }
+    static void unref(ICalTimezone *pointer) { g_clear_object(&pointer); }
+#endif
 #endif // ENABLE_ICAL
 };
 
