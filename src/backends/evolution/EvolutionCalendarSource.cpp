@@ -372,7 +372,11 @@ void EvolutionCalendarSource::listAllItems(RevisionMap_t &revisions)
         const GSList *l;
 
         for (l = objects; l; l = l->next) {
+#ifdef HAVE_LIBECAL_2_0
+            ICalComponent *icomp = (ICalComponent*)l->data;
+#else
             icalcomponent *icomp = (icalcomponent*)l->data;
+#endif
             EvolutionCalendarSource::ItemID id = EvolutionCalendarSource::getItemID(icomp);
             string luid = id.getLUID();
             string modTime = EvolutionCalendarSource::getItemModTime(icomp);
