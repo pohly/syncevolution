@@ -1,4 +1,4 @@
-#! /usr/bin/python -u
+#!/usr/bin/python3 -u
 # -*- coding: utf-8 -*-
 # vim: set fileencoding=utf-8 :#
 #
@@ -140,21 +140,21 @@ dbus_type_mapping = {
     dbus.Double: float,
     dbus.Int16: int,
     dbus.Int32: int,
-    dbus.Int64: long,
+    dbus.Int64: int,
     dbus.ObjectPath: str,
     dbus.Signature: str,
-    dbus.String: unicode,
+    dbus.String: str,
     dbus.Struct: tuple,
     dbus.UInt16: int,
     dbus.UInt32: int,
-    dbus.UInt64: long,
-    dbus.UTF8String: unicode
+    dbus.UInt64: int,
+    dbus.UTF8String: str
     }
 
 def strip_dbus(instance):
     base = dbus_type_mapping.get(type(instance), None)
     if base == dict or isinstance(instance, dict):
-        return dict([(strip_dbus(k), strip_dbus(v)) for k, v in instance.iteritems()])
+        return dict([(strip_dbus(k), strip_dbus(v)) for k, v in instance.items()])
     if base == list or isinstance(instance, list):
         l = [strip_dbus(v) for v in instance]
         l.sort()
@@ -163,7 +163,7 @@ def strip_dbus(instance):
         return tuple([strip_dbus(v) for v in instance])
     if base == None:
         return instance
-    if base == unicode:
+    if base == str:
         # try conversion to normal string
         try:
             return str(instance)
@@ -178,7 +178,7 @@ def checkpoint(operation):
     global starttime, running
     if running:
         now = time.time()
-        print "+%04.3fs %s stopping '%s', duration %fs" % (now - begin, time.ctime(now), running, now - starttime)
+        print("+%04.3fs %s stopping '%s', duration %fs" % (now - begin, time.ctime(now), running, now - starttime))
         if options.end_operation:
             subprocess.check_call(options.end_operation % {'operation': running},
                                   shell=True)
@@ -188,7 +188,7 @@ def checkpoint(operation):
             subprocess.check_call(options.start_operation % {'operation': operation},
                                   shell=True)
         now = time.time()
-        print "+%04.3fs %s starting '%s'" % (now - begin, time.ctime(now), operation)
+        print("+%04.3fs %s starting '%s'" % (now - begin, time.ctime(now), operation))
         starttime = now
         running = operation
 
@@ -200,7 +200,7 @@ def nothrow(fn):
         try:
             fn(*a, **b)
         except:
-            print traceback.format_exc()
+            print(traceback.format_exc())
 
     return wrapper
 
@@ -224,7 +224,7 @@ class ContactsView(dbus.service.Object):
 
      def search(self, filter):
           '''Start a search.'''
-          print 'searching: %s' % filter
+          print('searching: %s' % filter)
           self.viewPath = manager.Search(filter, self.path,
                                          timeout=100000)
           # This example uses the ViewControl to read contact data.
@@ -254,19 +254,19 @@ class ContactsView(dbus.service.Object):
          for index, contact in enumerate(self.contacts):
              if start == index:
                  # empty line with marker where range starts
-                 print '=> '
-             print '%s %03d %s' % \
+                 print('=> ')
+             print('%s %03d %s' % \
                  (start != None and index >= start and index < start + count and '*' or ' ',
                   index,
-                  isinstance(contact, dict) and contact.get('full-name', '<<unnamed>>') or '<<reading...>>')
+                  isinstance(contact, dict) and contact.get('full-name', '<<unnamed>>') or '<<reading...>>'))
              if options.verbosity >= VERBOSITY_DATA_FULL:
-                 print '    ', strip_dbus(contact)
-                 print
+                 print('    ', strip_dbus(contact))
+                 print()
 
      @nothrow
      def ContactsRead(self, ids, contacts):
          if options.verbosity >= VERBOSITY_DATA_FULL:
-             print 'got contact data %s => %s ' % (ids, strip_dbus(contacts))
+             print('got contact data %s => %s ' % (ids, strip_dbus(contacts)))
          min = len(contacts)
          max = -1
          for index, contact in contacts:
@@ -283,17 +283,17 @@ class ContactsView(dbus.service.Object):
 
      @nothrow
      def ReadFailed(self, ids, error):
-         print 'request for contact data %s failed: %s' % \
-             (ids, error)
+         print('request for contact data %s failed: %s' % \
+             (ids, error))
 
      @nothrow
      @dbus.service.method(dbus_interface='org._01.pim.contacts.ViewAgent',
                           in_signature='oias', out_signature='')
      def ContactsModified(self, view, start, ids):
          if options.verbosity >= VERBOSITY_NOTIFICATIONS:
-             print 'contacts modified: %s, start %d, count %d, ids %s' % \
+             print('contacts modified: %s, start %d, count %d, ids %s' % \
                  (view, start, len(ids),
-                  options.verbosity >= VERBOSITY_DATA_SUMMARY and strip_dbus(ids) or '<...>')
+                  options.verbosity >= VERBOSITY_DATA_SUMMARY and strip_dbus(ids) or '<...>'))
          self.contacts[start:start + len(ids)] = ids
          self.dump(start, len(ids))
          if not options.read_all:
@@ -304,9 +304,9 @@ class ContactsView(dbus.service.Object):
                           in_signature='oias', out_signature='')
      def ContactsAdded(self, view, start, ids):
          if options.verbosity >= VERBOSITY_NOTIFICATIONS:
-             print 'contacts added: %s, start %d, count %d, ids %s' % \
+             print('contacts added: %s, start %d, count %d, ids %s' % \
                  (view, start, len(ids),
-                  options.verbosity >= VERBOSITY_DATA_SUMMARY and strip_dbus(ids) or '<...>')
+                  options.verbosity >= VERBOSITY_DATA_SUMMARY and strip_dbus(ids) or '<...>'))
          self.contacts[start:start] = ids
          self.dump(start, len(ids))
          if not options.read_all:
@@ -317,9 +317,9 @@ class ContactsView(dbus.service.Object):
                           in_signature='oii', out_signature='')
      def ContactsRemoved(self, view, start, count):
          if options.verbosity >= VERBOSITY_NOTIFICATIONS:
-             print 'contacts removed: %s, start %d, count %d, ids %s' % \
+             print('contacts removed: %s, start %d, count %d, ids %s' % \
                  (view, start, len(ids),
-                  options.verbosity >= VERBOSITY_DATA_SUMMARY and strip_dbus(ids) or '<...>')
+                  options.verbosity >= VERBOSITY_DATA_SUMMARY and strip_dbus(ids) or '<...>'))
          # Remove obsolete entries.
          del self.contacts[start:start + len(ids)]
          self.dump(start, 0)
@@ -329,7 +329,7 @@ class ContactsView(dbus.service.Object):
                           in_signature='o', out_signature='')
      def Quiescent(self, view):
          if options.verbosity >= VERBOSITY_NOTIFICATIONS:
-             print 'view is stable'
+             print('view is stable')
          if options.read_all:
              # Avoid reading in parallel, if quiescence signal repeats.
              if running != 'read':
@@ -340,26 +340,26 @@ class ContactsView(dbus.service.Object):
 
 checkpoint('getallpeers')
 peers = strip_dbus(manager.GetAllPeers())
-print 'peers: %s' % peers
-print 'available databases: %s' % ([''] + ['peer-' + uid for uid in peers.keys()])
+print('peers: %s' % peers)
+print('available databases: %s' % ([''] + ['peer-' + uid for uid in list(peers.keys())]))
 
 checkpoint('getactiveaddressbooks')
 address_books = strip_dbus(manager.GetActiveAddressBooks())
 if options.address_books:
-    print 'active address books %s -> %s' % (address_books, options.address_books)
+    print('active address books %s -> %s' % (address_books, options.address_books))
     checkpoint('setactiveaddressbooks')
     manager.SetActiveAddressBooks(options.address_books)
 else:
-    print 'active address books: %s' % options.address_books
+    print('active address books: %s' % options.address_books)
 
 checkpoint('getsortorder')
 order = strip_dbus(manager.GetSortOrder())
 if options.order:
-    print 'active sort order %s -> %s' % (order, options.order)
+    print('active sort order %s -> %s' % (order, options.order))
     checkpoint('setsortorder')
     manager.SetSortOrder(options.order)
 else:
-    print 'active sort order: %s' % order
+    print('active sort order: %s' % order)
 
 if options.search != None:
     checkpoint('search')
@@ -367,6 +367,6 @@ if options.search != None:
     view.search(eval(options.search))
     loop.run()
 else:
-    print 'no search expression given, quitting'
+    print('no search expression given, quitting')
 
 checkpoint(None)

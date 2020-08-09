@@ -42,12 +42,12 @@ if COND_DBUS
 nodist_bin_SCRIPTS += src/syncevo-http-server
 endif
 src/syncevo-http-server: $(top_srcdir)/test/syncevo-http-server.py
-	$(AM_V_GEN)cp $< $@
+	$(AM_V_GEN)sed -e 's|\@PYTHON\@|$(PYTHON)|' $< > $@
 CLEANFILES += src/syncevo-http-server
 
 nodist_bin_SCRIPTS += src/syncevo-phone-config
 src/syncevo-phone-config: $(top_srcdir)/test/syncevo-phone-config.py
-	$(AM_V_GEN)cp $< $@
+	$(AM_V_GEN)sed -e 's|\@PYTHON\@|$(PYTHON)|' $< > $@
 CLEANFILES += src/syncevo-phone-config
 
 SYNCEVOLUTION_DEP =
@@ -72,7 +72,7 @@ src/synccompare : $(top_srcdir)/test/Algorithm/Diff.pm $(top_srcdir)/test/syncco
 bin_SCRIPTS += src/synclog2html
 CLEANFILES += src/synclog2html
 src/synclog2html: $(top_srcdir)/test/log2html.py
-	$(AM_V_GEN)cp $< $@ && chmod u+x $@
+	$(AM_V_GEN)sed -e 's|\@PYTHON\@|$(PYTHON)|' $< > $@ && chmod u+x $@
 
 CORE_SOURCES =
 
@@ -367,7 +367,7 @@ testcase2patch: $(TEST_FILES_GENERATED)
 nodist_noinst_DATA += src/ClientTest.cpp.html
 CLEANFILES += src/ClientTest.cpp.html
 src/ClientTest.cpp.html: build/source2html.py test/ClientTest.cpp
-	$(AM_V_GEN)python $+ >$@
+	$(AM_V_GEN)$(PYTHON) $+ >$@
 
 # copy base test files
 $(filter-out %.tem, $(filter src/testcases/%, $(subst $(top_srcdir)/test/,src/,$(CLIENT_LIB_TEST_FILES)))) : src/% : $(top_srcdir)/test/%

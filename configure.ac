@@ -62,6 +62,11 @@ dnl check for programs.
 AC_PROG_CXX
 AC_PROG_MAKE_SET
 
+AC_PATH_PROGS(PYTHON, python3 python, "")
+if test "x$PYTHON" = "x" ; then
+   AC_ERROR([python3 not found])
+fi
+
 dnl Use the most recent C++ standard that is supported by the code.
 dnl We can fall back to older versions, but not below C++11.
 dnl Akonadi/Qt don't work with C++17 yet, so we can't enable that.

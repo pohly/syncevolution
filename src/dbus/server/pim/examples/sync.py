@@ -1,4 +1,4 @@
-#! /usr/bin/python -u
+#!/usr/bin/python3 -u
 # -*- coding: utf-8 -*-
 # vim: set fileencoding=utf-8 :#
 #
@@ -112,7 +112,7 @@ manager = dbus.Interface(bus.get_object('org._01.pim.contacts',
 
 # Capture and print debug output.
 def log_output(path, level, output, component):
-    print '%s %s: %s' % (level, (component or 'sync'), output)
+    print('%s %s: %s' % (level, (component or 'sync'), output))
 
 # Format seconds as mm:ss[.mmm].
 def format_seconds(seconds, with_milli):
@@ -137,9 +137,9 @@ def log_progress(uid, event, data):
         bar = int(percent * BAR_LENGTH) * '-'
         if len(bar) > 0 and len(bar) < BAR_LENGTH:
             bar = bar[0:-1] + '>'
-        print prefix, '|%s%s| %.1f%% %s' % (bar, (BAR_LENGTH - len(bar)) * ' ', percent * 100, strip_dbus(data))
+        print(prefix, '|%s%s| %.1f%% %s' % (bar, (BAR_LENGTH - len(bar)) * ' ', percent * 100, strip_dbus(data)))
     else:
-        print prefix, '%s = %s' % (event, strip_dbus(data))
+        print(prefix, '%s = %s' % (event, strip_dbus(data)))
     last = now
 
 if options.debug:
@@ -167,21 +167,21 @@ dbus_type_mapping = {
     dbus.Double: float,
     dbus.Int16: int,
     dbus.Int32: int,
-    dbus.Int64: long,
+    dbus.Int64: int,
     dbus.ObjectPath: str,
     dbus.Signature: str,
-    dbus.String: unicode,
+    dbus.String: str,
     dbus.Struct: tuple,
     dbus.UInt16: int,
     dbus.UInt32: int,
-    dbus.UInt64: long,
-    dbus.UTF8String: unicode
+    dbus.UInt64: int,
+    dbus.UTF8String: str
     }
 
 def strip_dbus(instance):
     base = dbus_type_mapping.get(type(instance), None)
     if base == dict or isinstance(instance, dict):
-        return dict([(strip_dbus(k), strip_dbus(v)) for k, v in instance.iteritems()])
+        return dict([(strip_dbus(k), strip_dbus(v)) for k, v in instance.items()])
     if base == list or isinstance(instance, list):
         l = [strip_dbus(v) for v in instance]
         l.sort()
@@ -190,7 +190,7 @@ def strip_dbus(instance):
         return tuple([strip_dbus(v) for v in instance])
     if base == None:
         return instance
-    if base == unicode:
+    if base == str:
         # try conversion to normal string
         try:
             return str(instance)
@@ -217,13 +217,13 @@ def run(syncing=False):
     global result
     result = None
     if syncing:
-        print 'Running a sync, press CTRL-C to control it interactively.'
+        print('Running a sync, press CTRL-C to control it interactively.')
         while result is None and error is None:
             try:
                 loop.run()
             except KeyboardInterrupt:
                 while True:
-                    print '[a]bort, [s]uspend, [r]esume, continue? ',
+                    print('[a]bort, [s]uspend, [r]esume, continue? ', end=' ')
                     response = sys.stdin.readline()
                     try:
                         if response == 'a\n':
@@ -238,16 +238,16 @@ def run(syncing=False):
                         elif response == '\n':
                             break
                         else:
-                            print 'Unknown response, try again.'
-                    except dbus.exceptions.DBusException, ex:
-                        print 'operation %s failed: %s' % (response, ex)
+                            print('Unknown response, try again.')
+                    except dbus.exceptions.DBusException as ex:
+                        print('operation %s failed: %s' % (response, ex))
     else:
         loop.run()
 
     if error:
-        print
-        print error
-        print
+        print()
+        print(error)
+        print()
     return result
 async_args = {
     'reply_handler': done,
@@ -257,8 +257,8 @@ async_args = {
 
 manager.GetAllPeers(**async_args)
 peers = strip_dbus(run())
-print 'peers: %s' % peers
-print 'available databases: %s' % ([''] + ['peer-' + uid for uid in peers.keys()])
+print('peers: %s' % peers)
+print('available databases: %s' % ([''] + ['peer-' + uid for uid in list(peers.keys())]))
 
 if not error and options.configure:
     peer = json.loads(options.peer_config)
@@ -267,13 +267,13 @@ if not error and options.configure:
             peer['protocol'] = 'PBAP'
         if not 'address' in peer:
             peer['address'] = options.mac
-    print 'adding peer config %s = %s' % (peername, peer)
+    print('adding peer config %s = %s' % (peername, peer))
     manager.SetPeer(peername, peer, **async_args)
     run()
 
 def pull_progress():
     status = manager.GetPeerStatus(peername)
-    print 'Poll status:', strip_dbus(status)
+    print('Poll status:', strip_dbus(status))
     return True
 
 if not error and options.sync:
@@ -281,7 +281,7 @@ if not error and options.sync:
     if options.poll_progress is not None:
         pull_progress()
 
-    print 'syncing peer %s' % peername
+    print('syncing peer %s' % peername)
     flags = json.loads(options.sync_flags)
     if options.progress_frequency != 0.0:
         flags['progress-frequency'] = options.progress_frequency
@@ -307,10 +307,10 @@ if not error and options.sync:
         timeout.destroy()
 
 if not error and options.remove:
-    print 'removing peer %s' % peername
+    print('removing peer %s' % peername)
     manager.RemovePeer(peername, **async_args)
     run()
 
 if options.debug:
-    print "waiting for further debug output, press CTRL-C to stop"
+    print("waiting for further debug output, press CTRL-C to stop")
     loop.run()

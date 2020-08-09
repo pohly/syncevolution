@@ -1,4 +1,4 @@
-#! /usr/bin/python -u
+#!/usr/bin/python3 -u
 # -*- coding: utf-8 -*-
 # vim: set fileencoding=utf-8 :#
 #
@@ -44,7 +44,7 @@ import itertools
 import codecs
 import pprint
 import shutil
-import ConfigParser
+import configparser
 import io
 
 import localed
@@ -274,7 +274,7 @@ class Watchdog():
           self.timeout.set_callback(self._ping)
           self.timeout.attach(loop.get_context())
           if self.threshold < 0:
-               print '\nPinging server at intervals of %fs.' % self.interval
+               print('\nPinging server at intervals of %fs.' % self.interval)
 
      def stop(self):
           if self.timeout:
@@ -298,7 +298,7 @@ class Watchdog():
           logging.printf('ping results for %s: %s', name, self.results)
           if self.threshold < 0:
                for result in self.results:
-                    print '%s: ping duration: %f' % (name, result[1])
+                    print('%s: ping duration: %f' % (name, result[1]))
           self.reset()
 
      def _ping(self):
@@ -528,7 +528,7 @@ VERSION:3.0\r?
         # text, but some other error messages) and the servers stdout.
         def unicodeLog(test, log):
              open('/tmp/out', 'wb').write(log)
-             print re.match(r'ERROR(?! SUMMARY:)', log)
+             print(re.match(r'ERROR(?! SUMMARY:)', log))
         # Using assertNotRegexMatches with a negative lookahead led to unicode errors?!
         # Therefore stick to plain text checks and avoid false matches against valgind's
         # 'ERROR SUMMARY' by replacing that first.
@@ -553,7 +553,7 @@ VERSION:3.0\r?
                 dest = os.path.join(dirname, dir)
                 try:
                     os.rmdir(dest)
-                except OSError, ex:
+                except OSError as ex:
                     if ex.errno != errno.ENOTEMPTY:
                         raise
             for file in files:
@@ -635,7 +635,7 @@ XDG root.
 
     def testUIDError(self):
         '''TestContacts.testUIDError - check that invalid UID is properly detected and reported'''
-        with self.assertRaisesRegexp(dbus.DBusException,
+        with self.assertRaisesRegex(dbus.DBusException,
                                      'invalid peer uid: CAPITAL-LETTERS-NOT-ALLOWED'):
             self.manager.SetPeer('CAPITAL-LETTERS-NOT-ALLOWED',
                                  {})
@@ -671,7 +671,7 @@ XDG root.
 
         # PIM Manager must not allow overwriting an existing config.
         # Uses the new name for SetPeer().
-        with self.assertRaisesRegexp(dbus.DBusException,
+        with self.assertRaisesRegex(dbus.DBusException,
                                      'org._01.pim.contacts.Manager.AlreadyExists: uid ' + uid + ' is already in use') as cm:
              self.manager.CreatePeer(uid,
                                      peers[uid])
@@ -830,11 +830,11 @@ XDG root.
         testcases = os.environ.get('TESTPIM_TEST_SYNC_TESTCASES', None)
         if testcases:
              def progress(step, duration):
-                  print
+                  print()
                   edslogs = [x for x in os.listdir(logdir) if x.startswith('eds@')]
                   edslogs.sort()
-                  print '%s: %fs, see %s' % (step, duration,
-                                             os.path.join(logdir, edslogs[-1]))
+                  print('%s: %fs, see %s' % (step, duration,
+                                             os.path.join(logdir, edslogs[-1])))
         else:
              def progress(*args1, **args2):
                   pass
@@ -880,7 +880,7 @@ XDG root.
              self.assertEqual(len(newsessions), 1)
              session = newsessions[0]
              targetsessions.extend(newsessions)
-             config = ConfigParser.ConfigParser()
+             config = configparser.ConfigParser()
              content = '[fake]\n' + open(os.path.join(session, 'status.ini')).read()
              config.readfp(io.BytesIO(content))
              content = dict(config.items('fake'))
@@ -1309,7 +1309,7 @@ END:VCARD'''
 
         # Test invalid maxsession values.
         if not testcases:
-             with self.assertRaisesRegexp(dbus.DBusException,
+             with self.assertRaisesRegex(dbus.DBusException,
                                           "negative 'maxsessions' not allowed: -1"):
                   self.manager.SetPeer(uid,
                                        {'protocol': 'PBAP',
@@ -1318,7 +1318,7 @@ END:VCARD'''
              if not "SYNCEVOLUTION_LOGLEVEL" in os.environ:
                   self.assertEqual(files, listsyncevo(exclude=exclude))
 
-             with self.assertRaisesRegexp(dbus.DBusException,
+             with self.assertRaisesRegex(dbus.DBusException,
                                           'bad lexical cast: source type value could not be interpreted as target'):
                   self.manager.SetPeer(uid,
                                        {'protocol': 'PBAP',
@@ -1707,7 +1707,7 @@ END:VCARD''')
         self.assertEqual("first/last", self.manager.GetSortOrder())
 
         # Expect an error, no change to sort order.
-        with self.assertRaisesRegexp(dbus.DBusException,
+        with self.assertRaisesRegex(dbus.DBusException,
                                      'sort order.*not supported'):
              self.manager.SetSortOrder('no-such-order')
         self.assertEqual("first/last", self.manager.GetSortOrder())
@@ -1716,17 +1716,17 @@ END:VCARD''')
         #
         # The names are chosen so that sorting by first name and sorting by last name needs to
         # reverse the list.
-        for i, contact in enumerate([u'''BEGIN:VCARD
+        for i, contact in enumerate(['''BEGIN:VCARD
 VERSION:3.0
 N:Zoo;Äbraham
 END:VCARD''',
 
-u'''BEGIN:VCARD
+'''BEGIN:VCARD
 VERSION:3.0
 N:Yeah;Bénjamin
 END:VCARD''',
 
-u'''BEGIN:VCARD
+'''BEGIN:VCARD
 VERSION:3.0
 FN:Chàrly Xing
 N:Xing;Chàrly
@@ -1756,9 +1756,9 @@ END:VCARD''']):
         self.runUntil('contacts',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: self.view.haveData(0))
-        self.assertEqual(u'Äbraham', self.view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Bénjamin', self.view.contacts[1]['structured-name']['given'])
-        self.assertEqual(u'Chàrly', self.view.contacts[2]['structured-name']['given'])
+        self.assertEqual('Äbraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Bénjamin', self.view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Chàrly', self.view.contacts[2]['structured-name']['given'])
 
         # Invert sort order.
         self.manager.SetSortOrder("last/first")
@@ -1796,9 +1796,9 @@ END:VCARD''']):
         self.runUntil('contacts',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: self.view.haveData(0))
-        self.assertEqual(u'Äbraham', self.view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Bénjamin', self.view.contacts[1]['structured-name']['given'])
-        self.assertEqual(u'Chàrly', self.view.contacts[2]['structured-name']['given'])
+        self.assertEqual('Äbraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Bénjamin', self.view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Chàrly', self.view.contacts[2]['structured-name']['given'])
 
     @timeout(60)
     @property("snapshot", "simple-sort")
@@ -1913,9 +1913,9 @@ END:VCARD
         contact = copy.deepcopy(self.view.contacts[0])
         # Simplify the photo URI, if there was one. Avoid any assumptions
         # about the filename, except that it is a file:/// uri.
-        if contact.has_key('photo'):
+        if 'photo' in contact:
              contact['photo'] = re.sub('^file:///.*', 'file:///<stripped>', contact['photo'])
-        if contact.has_key('id'):
+        if 'id' in contact:
              contact['id'] = '<stripped>'
         self.assertEqual({'full-name': 'John Doe',
                           'groups': ['TEST1', 'TEST2'],
@@ -2307,8 +2307,7 @@ END:VCARD''' % {'peer': peer, 'index': index})
 
         # Now test all subsets until we are back at 'all active'.
         current = ['', 'a', 'b', 'c']
-        for active in [filter(lambda x: x != None,
-                              [s, a, b, c])
+        for active in [[x for x in [s, a, b, c] if x != None]
                        for s in [None, '']
                        for a in [None, 'a']
                        for b in [None, 'b']
@@ -2340,7 +2339,7 @@ END:VCARD''' % {'peer': peer, 'index': index})
         #
         # The names are chosen so that sorting by first name and sorting by last name needs to
         # reverse the list.
-        for i, contact in enumerate([u'''BEGIN:VCARD
+        for i, contact in enumerate(['''BEGIN:VCARD
 VERSION:3.0
 N:Zoo;Abraham
 NICKNAME:Ace
@@ -2351,7 +2350,7 @@ TEL:089/7888-99
 EMAIL:az@example.com
 END:VCARD''',
 
-u'''BEGIN:VCARD
+'''BEGIN:VCARD
 VERSION:3.0
 N:Yeah;Benjamin
 TEL:+1-89-7888-99
@@ -2360,7 +2359,7 @@ END:VCARD''',
 # Chárleß has chárless as representation after folding the case.
 # This is different from lower case.
 # See http://www.boost.org/doc/libs/1_51_0/libs/locale/doc/html/glossary.html#term_case_folding
-u'''BEGIN:VCARD
+'''BEGIN:VCARD
 VERSION:3.0
 FN:Charly 'Chárleß' Xing
 N:Xing;Charly
@@ -2390,9 +2389,9 @@ END:VCARD''']):
         self.runUntil('contacts',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: self.view.haveData(0, 3))
-        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
-        self.assertEqual(u'Charly', self.view.contacts[2]['structured-name']['given'])
+        self.assertEqual('Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', self.view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Charly', self.view.contacts[2]['structured-name']['given'])
 
         # Find Charly by his FN (case insensitive by default).
         view = ContactsView(self.manager)
@@ -2405,7 +2404,7 @@ END:VCARD''']):
         self.runUntil('charles',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.haveData(0))
-        self.assertEqual(u'Charly', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Charly', view.contacts[0]['structured-name']['given'])
 
         # We can expand the search with ReplaceSearch().
         view.view.ReplaceSearch([], False)
@@ -2416,9 +2415,9 @@ END:VCARD''']):
         self.runUntil('expanded contacts',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: self.view.haveData(0, 3))
-        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
-        self.assertEqual(u'Charly', self.view.contacts[2]['structured-name']['given'])
+        self.assertEqual('Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', self.view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Charly', self.view.contacts[2]['structured-name']['given'])
 
         # Find Charly by his FN (case insensitive explicitly).
         view = ContactsView(self.manager)
@@ -2431,7 +2430,7 @@ END:VCARD''']):
         self.runUntil('charles',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.haveData(0))
-        self.assertEqual(u'Charly', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Charly', view.contacts[0]['structured-name']['given'])
 
         # Find Charly by his FN (case sensitive explicitly).
         view = ContactsView(self.manager)
@@ -2444,7 +2443,7 @@ END:VCARD''']):
         self.runUntil('charles',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.haveData(0))
-        self.assertEqual(u'Charly', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Charly', view.contacts[0]['structured-name']['given'])
 
         # Do not find Charly by his FN (case sensitive explicitly).
         view = ContactsView(self.manager)
@@ -2465,8 +2464,8 @@ END:VCARD''']):
         self.runUntil('two contacts',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.haveData(0))
-        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Benjamin', view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Abraham', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', view.contacts[1]['structured-name']['given'])
 
         # Refine search without actually changing the result.
         for refine in [True, False]:
@@ -2475,8 +2474,8 @@ END:VCARD''']):
              self.runUntil('end of search refinement',
                            check=lambda: self.assertEqual([], view.errors),
                            until=lambda: view.quiescentCount > 0)
-             self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
-             self.assertEqual(u'Benjamin', view.contacts[1]['structured-name']['given'])
+             self.assertEqual('Abraham', view.contacts[0]['structured-name']['given'])
+             self.assertEqual('Benjamin', view.contacts[1]['structured-name']['given'])
 
         # Restrict search to Benjamin. The result is a view
         # which has different indices than the full view.
@@ -2486,7 +2485,7 @@ END:VCARD''']):
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.quiescentCount > 0)
         self.assertEqual(1, len(view.contacts))
-        self.assertEqual(u'Benjamin', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', view.contacts[0]['structured-name']['given'])
 
         # Refine again, without changes.
         view.quiescentCount = 0
@@ -2495,7 +2494,7 @@ END:VCARD''']):
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.quiescentCount > 0)
         self.assertEqual(1, len(view.contacts))
-        self.assertEqual(u'Benjamin', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', view.contacts[0]['structured-name']['given'])
 
         # Refine to empty view.
         view.quiescentCount = 0
@@ -2516,7 +2515,7 @@ END:VCARD''']):
         self.runUntil('two contacts',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.haveData(0))
-        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', view.contacts[0]['structured-name']['given'])
 
         # Find Abraham by his email.
         view = ContactsView(self.manager)
@@ -2529,7 +2528,7 @@ END:VCARD''']):
         self.runUntil('two contacts',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.haveData(0))
-        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', view.contacts[0]['structured-name']['given'])
 
         # Find Abraham by his 1234 telephone number.
         view = ContactsView(self.manager)
@@ -2542,7 +2541,7 @@ END:VCARD''']):
         self.runUntil('1234 data',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.haveData(0))
-        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', view.contacts[0]['structured-name']['given'])
 
         # Find Abraham by his 1234 telephone number, as sub-string.
         view = ContactsView(self.manager)
@@ -2555,7 +2554,7 @@ END:VCARD''']):
         self.runUntil('23 data',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.haveData(0))
-        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', view.contacts[0]['structured-name']['given'])
 
         # Find Abraham by his 1234 telephone number, ignoring
         # formatting.
@@ -2569,7 +2568,7 @@ END:VCARD''']):
         self.runUntil('12/34 data',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.haveData(0))
-        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', view.contacts[0]['structured-name']['given'])
 
         # Find Abraham by his 56/78 telephone number, ignoring
         # slash in contact.
@@ -2583,7 +2582,7 @@ END:VCARD''']):
         self.runUntil('5678 data',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.haveData(0))
-        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', view.contacts[0]['structured-name']['given'])
 
         # Find Abraham via the +1-800-FOOBAR vanity number.
         view = ContactsView(self.manager)
@@ -2596,7 +2595,7 @@ END:VCARD''']):
         self.runUntil('+1-800-foobar data',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.haveData(0))
-        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', view.contacts[0]['structured-name']['given'])
 
         # Find Abraham via the +1-800-FOOBAR vanity number, with digits
         # instead of alpha characters.
@@ -2610,7 +2609,7 @@ END:VCARD''']):
         self.runUntil('366227 data',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.haveData(0))
-        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', view.contacts[0]['structured-name']['given'])
 
         # Find Abraham via caller ID for +1-800-FOOBAR.
         view = ContactsView(self.manager)
@@ -2623,7 +2622,7 @@ END:VCARD''']):
         self.runUntil('+1800366227 data',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.haveData(0))
-        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', view.contacts[0]['structured-name']['given'])
 
         # Find Abraham via caller ID for 089/7888-99 (country is Germany).
         view = ContactsView(self.manager)
@@ -2636,7 +2635,7 @@ END:VCARD''']):
         self.runUntil('+4989788899 data',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.haveData(0))
-        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', view.contacts[0]['structured-name']['given'])
 
         # Find Abraham via caller ID for +44 89 7888-99 (Abraham has no country code
         # set and matches, whereas Benjamin has +1 as country code and does not match).
@@ -2650,7 +2649,7 @@ END:VCARD''']):
         self.runUntil('+4489788899 data',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.haveData(0))
-        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', view.contacts[0]['structured-name']['given'])
 
         # Find Abraham and Benjamin via 089/7888-99 (not a full caller
         # ID, but at least a valid phone number).  Benjamin matches
@@ -2666,8 +2665,8 @@ END:VCARD''']):
         self.runUntil('089788899 data',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.haveData(0))
-        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Benjamin', view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Abraham', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', view.contacts[1]['structured-name']['given'])
 
         # Don't find anyone.
         view = ContactsView(self.manager)
@@ -2695,7 +2694,7 @@ END:VCARD''']):
                        names.append(contact[0])
                   else:
                        # just the name
-                       output.write(u'''BEGIN:VCARD
+                       output.write('''BEGIN:VCARD
 VERSION:3.0
 FN:%(name)s
 N:%(name)s;;;;
@@ -2726,30 +2725,30 @@ END:VCARD
                            check=lambda: self.assertEqual([], self.view.errors),
                            until=lambda: self.view.haveData(0, numtestcases))
              for i, name in enumerate(names):
-                  msg = u'contact #%d with name %s in\n%s' % (i, name, pprint.pformat(self.stripDBus(self.view.contacts, sortLists=False)))
+                  msg = 'contact #%d with name %s in\n%s' % (i, name, pprint.pformat(self.stripDBus(self.view.contacts, sortLists=False)))
                   self.assertEqual(name, self.view.contacts[i]['full-name'])
 
              # Run searches and compare results.
              for i, (query, names) in enumerate(searches):
-                  msg = u'query %s, names %s' % (query, names)
+                  msg = 'query %s, names %s' % (query, names)
                   view = ContactsView(self.manager)
                   view.search(query)
                   self.runUntil('search %d: %s' % (i, query),
                                 check=lambda: self.assertEqual([], view.errors),
                                 until=lambda: view.quiescentCount > 0)
-                  msg = u'query %s, names %s in\n%s' % (query, names, pprint.pformat(self.stripDBus(view.contacts, sortLists=False)))
+                  msg = 'query %s, names %s in\n%s' % (query, names, pprint.pformat(self.stripDBus(view.contacts, sortLists=False)))
                   self.assertEqual(len(names), len(view.contacts))
                   view.read(0, len(names))
                   self.runUntil('data %d: %s' % (i, query),
                                 check=lambda: self.assertEqual([], view.errors),
                                 until=lambda: view.haveData(0, len(names)))
                   for e, name in enumerate(names):
-                       msg = u'query %s, names %s, name #%d %s in\n%s' % (query, names, e, name, pprint.pformat(self.stripDBus(view.contacts, sortLists=False)))
+                       msg = 'query %s, names %s, name #%d %s in\n%s' % (query, names, e, name, pprint.pformat(self.stripDBus(view.contacts, sortLists=False)))
                        self.assertEqual(name, view.contacts[e]['full-name'])
-        except Exception, ex:
+        except Exception as ex:
              if msg:
                   info = sys.exc_info()
-                  raise Exception('%s:\n%s' % (msg, repr(ex))), None, info[2]
+                  raise Exception('%s:\n%s' % (msg, repr(ex))).with_traceback(info[2])
              else:
                   raise
         return view
@@ -2758,11 +2757,11 @@ END:VCARD
     @property("ENV", "LC_TYPE=ja_JP.UTF-8 LC_ALL=ja_JP.UTF-8 LANG=ja_JP.UTF-8")
     def testFilterJapanese(self):
          self.doFilter(# Names of all contacts, sorted as expected.
-                       ('111', u'1月', 'Bad'),
+                       ('111', '1月', 'Bad'),
                        # Query + expected results.
-                       (([], ('111', u'1月', 'Bad')),
-                        ([['any-contains', '1']], ('111', u'1月')),
-                        ([['any-contains', u'1月']], (u'1月',)))
+                       (([], ('111', '1月', 'Bad')),
+                        ([['any-contains', '1']], ('111', '1月')),
+                        ([['any-contains', '1月']], ('1月',)))
                        )
 
     @timeout(60)
@@ -2771,19 +2770,19 @@ END:VCARD
          self.doFilter(# Names of all contacts, sorted as expected.
                        # 江 = jiāng = Jiang when using Pinyin and thus after Jeffries and before Meadows.
                        # 鳥 = niǎo before 女性 = nǚ xìng (see FDO #66618)
-                       ('Adams', 'Jeffries', u'江', 'jiang', 'Meadows', u'鳥', u'女性' ),
+                       ('Adams', 'Jeffries', '江', 'jiang', 'Meadows', '鳥', '女性' ),
                        # 'J' may or may not match Jiang; by default, it matches.
-                       (([['any-contains', 'J']], ('Jeffries', u'江', 'jiang')),
+                       (([['any-contains', 'J']], ('Jeffries', '江', 'jiang')),
                         ([['any-contains', 'J', 'no-transliteration']], ('Jeffries', 'jiang')),
                         ([['any-contains', 'J', 'no-transliteration', 'case-sensitive']], ('Jeffries',)),
-                        ([['any-contains', u'江']], (u'江', 'jiang')),
-                        ([['any-contains', u'jiang']], (u'江', 'jiang')),
-                        ([['any-contains', u'jiāng']], (u'江', 'jiang')),
-                        ([['any-contains', u'jiāng', 'no-transliteration']], ('jiang',)),
-                        ([['any-contains', u'jiāng', 'accent-sensitive']], (u'江',)),
-                        ([['any-contains', u'jiāng', 'accent-sensitive', 'case-sensitive']], (u'江',)),
-                        ([['any-contains', u'Jiāng', 'accent-sensitive', 'case-sensitive']], ()),
-                        ([['any-contains', u'Jiang']], (u'江', 'jiang')),
+                        ([['any-contains', '江']], ('江', 'jiang')),
+                        ([['any-contains', 'jiang']], ('江', 'jiang')),
+                        ([['any-contains', 'jiāng']], ('江', 'jiang')),
+                        ([['any-contains', 'jiāng', 'no-transliteration']], ('jiang',)),
+                        ([['any-contains', 'jiāng', 'accent-sensitive']], ('江',)),
+                        ([['any-contains', 'jiāng', 'accent-sensitive', 'case-sensitive']], ('江',)),
+                        ([['any-contains', 'Jiāng', 'accent-sensitive', 'case-sensitive']], ()),
+                        ([['any-contains', 'Jiang']], ('江', 'jiang')),
                         ),
                        )
 
@@ -2794,7 +2793,7 @@ END:VCARD
                        # DIN 5007 Variant 2 defines phone book sorting in
                        # Germany. It does not apply to Austria.
                        # Example from http://de.wikipedia.org/wiki/Alphabetische_Sortierung
-                       (u'Göbel', u'Goethe', u'Göthe', u'Götz', u'Goldmann'),
+                       ('Göbel', 'Goethe', 'Göthe', 'Götz', 'Goldmann'),
                        (),
                        )
 
@@ -2802,8 +2801,8 @@ END:VCARD
     @property("ENV", "LC_TYPE=zh_CN.UTF-8 LANG=zh_CN.UTF-8")
     def testLocaled(self):
          # Use mixed Chinese/Western names, because then the locale really matters.
-         namespinyin = ('Adams', 'Jeffries', u'江', 'Meadows', u'鳥', u'女性' )
-         namesgerman = ('Adams', 'Jeffries', 'Meadows', u'女性', u'江', u'鳥' )
+         namespinyin = ('Adams', 'Jeffries', '江', 'Meadows', '鳥', '女性' )
+         namesgerman = ('Adams', 'Jeffries', 'Meadows', '女性', '江', '鳥' )
          numtestcases = len(namespinyin)
          self.doFilter(namespinyin, ())
 
@@ -2822,7 +2821,7 @@ END:VCARD
                             check=lambda: self.assertEqual([], self.view.errors),
                             until=lambda: self.view.haveData(0, numtestcases))
               for i, name in enumerate(namesgerman):
-                   msg = u'contact #%d with name %s in\n%s' % (i, name, pprint.pformat(self.stripDBus(self.view.contacts, sortLists=False)))
+                   msg = 'contact #%d with name %s in\n%s' % (i, name, pprint.pformat(self.stripDBus(self.view.contacts, sortLists=False)))
                    self.assertEqual(name, self.view.contacts[i]['full-name'])
 
               # Switch back to Pinyin without including the new value.
@@ -2837,12 +2836,12 @@ END:VCARD
                             check=lambda: self.assertEqual([], self.view.errors),
                             until=lambda: self.view.haveData(0, numtestcases))
               for i, name in enumerate(namespinyin):
-                   msg = u'contact #%d with name %s in\n%s' % (i, name, pprint.pformat(self.stripDBus(self.view.contacts, sortLists=False)))
+                   msg = 'contact #%d with name %s in\n%s' % (i, name, pprint.pformat(self.stripDBus(self.view.contacts, sortLists=False)))
                    self.assertEqual(name, self.view.contacts[i]['full-name'])
-         except Exception, ex:
+         except Exception as ex:
              if msg:
                   info = sys.exc_info()
-                  raise Exception('%s:\n%s' % (msg, repr(ex))), None, info[2]
+                  raise Exception('%s:\n%s' % (msg, repr(ex))).with_traceback(info[2])
              else:
                   raise
          finally:
@@ -2908,10 +2907,10 @@ END:VCARD
                             check=lambda: self.assertEqual([], view.errors),
                             until=lambda: view.quiescentCount > (usingEDS and 2 or 1))
               self.assertEqual(len(view.contacts), 1)
-         except Exception, ex:
+         except Exception as ex:
              if msg:
                   info = sys.exc_info()
-                  raise Exception('%s:\n%s' % (msg, repr(ex))), None, info[2]
+                  raise Exception('%s:\n%s' % (msg, repr(ex))).with_traceback(info[2])
              else:
                   raise
          finally:
@@ -3088,7 +3087,7 @@ END:VCARD
         #
         # The names are chosen so that sorting by first name and sorting by last name needs to
         # reverse the list.
-        for i, contact in enumerate([u'''BEGIN:VCARD
+        for i, contact in enumerate(['''BEGIN:VCARD
 VERSION:3.0
 N:Zoo;Abraham
 NICKNAME:Ace
@@ -3096,7 +3095,7 @@ TEL:1234
 EMAIL:az@example.com
 END:VCARD''',
 
-u'''BEGIN:VCARD
+'''BEGIN:VCARD
 VERSION:3.0
 N:Yeah;Benjamin
 END:VCARD''',
@@ -3104,7 +3103,7 @@ END:VCARD''',
 # Chárleß has chárless as representation after folding the case.
 # This is different from lower case.
 # See http://www.boost.org/doc/libs/1_51_0/libs/locale/doc/html/glossary.html#term_case_folding
-u'''BEGIN:VCARD
+'''BEGIN:VCARD
 VERSION:3.0
 FN:Charly 'Chárleß' Xing
 N:Xing;Charly
@@ -3144,16 +3143,16 @@ END:VCARD''']):
                                      self.assertEqual([], self.view.errors)),
                       until=lambda: view.haveData(0) and \
                            self.view.haveData(0, 3))
-        self.assertEqual(u'Charly', view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
-        self.assertEqual(u'Charly', self.view.contacts[2]['structured-name']['given'])
+        self.assertEqual('Charly', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', self.view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Charly', self.view.contacts[2]['structured-name']['given'])
 
         # Unmatched contact remains unmatched.
         # Modified phone number no longer matched.
         item = os.path.join(self.contacts, 'contact%d.vcf' % 0)
         output = codecs.open(item, "w", "utf-8")
-        output.write(u'''BEGIN:VCARD
+        output.write('''BEGIN:VCARD
 VERSION:3.0
 N:Zoo;Abraham
 NICKNAME:King
@@ -3178,8 +3177,8 @@ END:VCARD''')
         self.runUntil('Abraham nickname read',
                       check=check,
                       until=lambda: self.view.haveData(0))
-        self.assertEqual(u'Charly', view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Charly', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', self.view.contacts[0]['structured-name']['given'])
 
         # No longer part of the telephone search view.
         self.runUntil('phone results',
@@ -3191,7 +3190,7 @@ END:VCARD''')
         check1 = view.setCheck(lambda: self.assertEqual(1, len(view.contacts)))
         item = os.path.join(self.contacts, 'contact%d.vcf' % 2)
         output = codecs.open(item, "w", "utf-8")
-        output.write(u'''BEGIN:VCARD
+        output.write('''BEGIN:VCARD
 VERSION:3.0
 FN:Charly 'Chárleß' Xing
 NICKNAME:Angel
@@ -3210,14 +3209,14 @@ END:VCARD''')
                       check=check,
                       until=lambda: self.view.haveData(2) and \
                            view.haveData(0))
-        self.assertEqual(u'Charly', view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Charly', self.view.contacts[2]['structured-name']['given'])
+        self.assertEqual('Charly', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Charly', self.view.contacts[2]['structured-name']['given'])
 
         # Unmatched contact gets matched.
         check1 = view.setCheck(lambda: self.assertLess(0, len(view.contacts)))
         item = os.path.join(self.contacts, 'contact%d.vcf' % 0)
         output = codecs.open(item, "w", "utf-8")
-        output.write(u'''BEGIN:VCARD
+        output.write('''BEGIN:VCARD
 VERSION:3.0
 N:Zoo;Abraham
 NICKNAME:Chárleß alter ego
@@ -3240,9 +3239,9 @@ END:VCARD''')
                       check=check,
                       until=lambda: self.view.haveData(0) and \
                            view.haveData(0))
-        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Charly', view.contacts[1]['structured-name']['given'])
-        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Charly', view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Abraham', self.view.contacts[0]['structured-name']['given'])
 
         # Invert sort order.
         check1 = view.setCheck(None)
@@ -3259,12 +3258,12 @@ END:VCARD''')
                       until=lambda: self.view.haveData(0, 3) and \
                            view.haveData(0, 2))
         self.assertEqual(2, len(view.contacts))
-        self.assertEqual(u'Charly', view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Abraham', view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Charly', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', view.contacts[1]['structured-name']['given'])
         self.assertEqual(3, len(self.view.contacts))
-        self.assertEqual(u'Charly', self.view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
-        self.assertEqual(u'Abraham', self.view.contacts[2]['structured-name']['given'])
+        self.assertEqual('Charly', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', self.view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Abraham', self.view.contacts[2]['structured-name']['given'])
 
         # And back again.
         self.manager.SetSortOrder("first/last")
@@ -3280,18 +3279,18 @@ END:VCARD''')
                       until=lambda: self.view.haveData(0, 3) and \
                            view.haveData(0, 2))
         self.assertEqual(2, len(view.contacts))
-        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Charly', view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Abraham', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Charly', view.contacts[1]['structured-name']['given'])
         self.assertEqual(3, len(self.view.contacts))
-        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
-        self.assertEqual(u'Charly', self.view.contacts[2]['structured-name']['given'])
+        self.assertEqual('Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', self.view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Charly', self.view.contacts[2]['structured-name']['given'])
 
         # Matched contact gets unmatched.
         check1 = view.setCheck(lambda: self.assertLess(0, len(view.contacts)))
         item = os.path.join(self.contacts, 'contact%d.vcf' % 0)
         output = codecs.open(item, "w", "utf-8")
-        output.write(u'''BEGIN:VCARD
+        output.write('''BEGIN:VCARD
 VERSION:3.0
 N:Zoo;Abraham
 NICKNAME:None
@@ -3312,8 +3311,8 @@ END:VCARD''')
         self.runUntil('Abraham nickname read, None',
                       check=check,
                       until=lambda: self.view.haveData(0))
-        self.assertEqual(u'Charly', view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Charly', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', self.view.contacts[0]['structured-name']['given'])
 
         # Finally, remove everything.
         logging.log('remove contacts')
@@ -3339,7 +3338,7 @@ END:VCARD''')
         #
         # The names are chosen so that sorting by first name and sorting by last name needs to
         # reverse the list.
-        for i, contact in enumerate([u'''BEGIN:VCARD
+        for i, contact in enumerate(['''BEGIN:VCARD
 VERSION:3.0
 N:Zoo;Abraham
 NICKNAME:Ace
@@ -3350,7 +3349,7 @@ TEL:089/7888-99
 EMAIL:az@example.com
 END:VCARD''',
 
-u'''BEGIN:VCARD
+'''BEGIN:VCARD
 VERSION:3.0
 N:Yeah;Benjamin
 TEL:+1-89-7888-99
@@ -3359,7 +3358,7 @@ END:VCARD''',
 # Chárleß has chárless as representation after folding the case.
 # This is different from lower case.
 # See http://www.boost.org/doc/libs/1_51_0/libs/locale/doc/html/glossary.html#term_case_folding
-u'''BEGIN:VCARD
+'''BEGIN:VCARD
 VERSION:3.0
 FN:Charly 'Chárleß' Xing
 N:Xing;Charly
@@ -3389,9 +3388,9 @@ END:VCARD''']):
         self.runUntil('contacts',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: self.view.haveData(0, 3))
-        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
-        self.assertEqual(u'Charly', self.view.contacts[2]['structured-name']['given'])
+        self.assertEqual('Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', self.view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Charly', self.view.contacts[2]['structured-name']['given'])
 
         # Browse initial two contacts (= uses MatchAll filter with limit).
         view = ContactsView(self.manager)
@@ -3404,8 +3403,8 @@ END:VCARD''']):
         self.runUntil('browse data',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.haveData(0, 2))
-        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', self.view.contacts[1]['structured-name']['given'])
         view.close()
 
         # Find Abraham and Benjamin but stop at first contact.
@@ -3419,10 +3418,10 @@ END:VCARD''']):
         self.runUntil('one contact',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.haveData(0))
-        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', view.contacts[0]['structured-name']['given'])
 
         # Changing the limit is not supported.
-        with self.assertRaisesRegexp(dbus.DBusException,
+        with self.assertRaisesRegex(dbus.DBusException,
                                      r'.*: refining the search must not change the maximum number of results$'):
              view.view.RefineSearch([['limit', '3'], ['any-contains', 'foo']])
 
@@ -3433,7 +3432,7 @@ END:VCARD''']):
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.quiescentCount > 0)
         self.assertEqual(1, len(view.contacts))
-        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', view.contacts[0]['structured-name']['given'])
 
         # Restrict search to Benjamin. We can leave out the limit, the old
         # stays active automatically. Abraham drops out of the view
@@ -3449,7 +3448,7 @@ END:VCARD''']):
         self.runUntil('Benjamin',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.haveData(0))
-        self.assertEqual(u'Benjamin', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', view.contacts[0]['structured-name']['given'])
 
         # Refine again, without changes.
         view.quiescentCount = 0
@@ -3458,7 +3457,7 @@ END:VCARD''']):
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.quiescentCount > 0)
         self.assertEqual(1, len(view.contacts))
-        self.assertEqual(u'Benjamin', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', view.contacts[0]['structured-name']['given'])
 
         # Refine to empty view.
         view.quiescentCount = 0
@@ -3479,7 +3478,7 @@ END:VCARD''']):
         self.runUntil('Benjamin',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: view.haveData(0))
-        self.assertEqual(u'Benjamin', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', view.contacts[0]['structured-name']['given'])
 
     @timeout(60)
     @property("ENV", "LC_TYPE=de_DE.UTF-8 LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8")
@@ -3501,14 +3500,14 @@ END:VCARD''']):
         #
         # The names are chosen so that sorting by first name and sorting by last name needs to
         # reverse the list.
-        for i, contact in enumerate([u'''BEGIN:VCARD
+        for i, contact in enumerate(['''BEGIN:VCARD
 VERSION:3.0
 N:Zoo;Abraham
 FN:Abraham Zoo
 NICKNAME:Ace
 END:VCARD''',
 
-u'''BEGIN:VCARD
+'''BEGIN:VCARD
 VERSION:3.0
 N:Yeah;Benjamin
 END:VCARD''',
@@ -3516,7 +3515,7 @@ END:VCARD''',
 # Chárleß has chárless as representation after folding the case.
 # This is different from lower case.
 # See http://www.boost.org/doc/libs/1_51_0/libs/locale/doc/html/glossary.html#term_case_folding
-u'''BEGIN:VCARD
+'''BEGIN:VCARD
 VERSION:3.0
 FN:Charly 'Chárleß' Xing
 N:Xing;Charly
@@ -3552,15 +3551,15 @@ END:VCARD''']):
                       check=check,
                       until=lambda: view.haveData(0) and \
                            self.view.haveData(0, 3))
-        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
-        self.assertEqual(u'Charly', self.view.contacts[2]['structured-name']['given'])
+        self.assertEqual('Abraham', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', self.view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Charly', self.view.contacts[2]['structured-name']['given'])
 
         # Matched contact remains matched.
         item = os.path.join(self.contacts, 'contact%d.vcf' % 0)
         output = codecs.open(item, "w", "utf-8")
-        output.write(u'''BEGIN:VCARD
+        output.write('''BEGIN:VCARD
 VERSION:3.0
 N:Zoo;Abraham
 FN:Abraham Zoo
@@ -3578,13 +3577,13 @@ END:VCARD''')
         self.runUntil('Abraham nickname read',
                       check=check,
                       until=lambda: self.view.haveData(0) and view.haveData(0))
-        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', self.view.contacts[0]['structured-name']['given'])
 
         # Unmatched contact gets matched, but stays out of view.
         item = os.path.join(self.contacts, 'contact%d.vcf' % 0)
         output = codecs.open(item, "w", "utf-8")
-        output.write(u'''BEGIN:VCARD
+        output.write('''BEGIN:VCARD
 VERSION:3.0
 VERSION:3.0
 FN:Charly 'Chárleß' Xing
@@ -3601,17 +3600,17 @@ END:VCARD''')
         check1 = view.setCheck(lambda: self.assertEqual(1, len(view.contacts)))
         self.assertEqual(1, len(view.contacts))
         self.assertTrue(view.haveData(0))
-        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', view.contacts[0]['structured-name']['given'])
         self.assertFalse(self.view.haveData(2))
         self.view.read(2, 1)
         self.runUntil('Abraham nickname read, II',
                       check=check,
                       until=lambda: self.view.haveData(2) and \
                            view.haveData(0))
-        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
-        self.assertEqual(u'Charly', self.view.contacts[2]['structured-name']['given'])
+        self.assertEqual('Abraham', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', self.view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Charly', self.view.contacts[2]['structured-name']['given'])
 
         # Invert sort order.
         check1 = view.setCheck(None)
@@ -3628,11 +3627,11 @@ END:VCARD''')
                       until=lambda: self.view.haveData(0, 3) and \
                            view.haveData(0, 1))
         self.assertEqual(1, len(view.contacts))
-        self.assertEqual(u'Charly', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Charly', view.contacts[0]['structured-name']['given'])
         self.assertEqual(3, len(self.view.contacts))
-        self.assertEqual(u'Charly', self.view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
-        self.assertEqual(u'Abraham', self.view.contacts[2]['structured-name']['given'])
+        self.assertEqual('Charly', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', self.view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Abraham', self.view.contacts[2]['structured-name']['given'])
 
         # And back again.
         self.manager.SetSortOrder("first/last")
@@ -3648,16 +3647,16 @@ END:VCARD''')
                       until=lambda: self.view.haveData(0, 3) and \
                            view.haveData(0, 1))
         self.assertEqual(1, len(view.contacts))
-        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', view.contacts[0]['structured-name']['given'])
         self.assertEqual(3, len(self.view.contacts))
-        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
-        self.assertEqual(u'Charly', self.view.contacts[2]['structured-name']['given'])
+        self.assertEqual('Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', self.view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Charly', self.view.contacts[2]['structured-name']['given'])
 
         # Matched contact gets unmatched.
         item = os.path.join(self.contacts, 'contact%d.vcf' % 0)
         output = codecs.open(item, "w", "utf-8")
-        output.write(u'''BEGIN:VCARD
+        output.write('''BEGIN:VCARD
 VERSION:3.0
 N:Zoo;Abrahan
 FN:Abrahan Zoo
@@ -3677,8 +3676,8 @@ END:VCARD''')
         self.runUntil('Abrahan read',
                       check=check,
                       until=lambda: self.view.haveData(0) and view.haveData(0))
-        self.assertEqual(u'Benjamin', view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Abrahan', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abrahan', self.view.contacts[0]['structured-name']['given'])
 
         # Finally, remove everything.
         logging.log('remove contacts')
@@ -3709,14 +3708,14 @@ END:VCARD''')
         #
         # The names are chosen so that sorting by first name and sorting by last name needs to
         # reverse the list.
-        for i, contact in enumerate([u'''BEGIN:VCARD
+        for i, contact in enumerate(['''BEGIN:VCARD
 VERSION:3.0
 N:Zoo;Abraham
 FN:Abraham Zoo
 NICKNAME:Ace
 END:VCARD''',
 
-u'''BEGIN:VCARD
+'''BEGIN:VCARD
 VERSION:3.0
 N:Yeah;Benjamin
 FN:Benjamin Yeah
@@ -3725,7 +3724,7 @@ END:VCARD''',
 # Chárleß has chárless as representation after folding the case.
 # This is different from lower case.
 # See http://www.boost.org/doc/libs/1_51_0/libs/locale/doc/html/glossary.html#term_case_folding
-u'''BEGIN:VCARD
+'''BEGIN:VCARD
 VERSION:3.0
 FN:Charly 'Chárleß' Xing
 N:Xing;Charly
@@ -3757,10 +3756,10 @@ END:VCARD''']):
                                      self.assertEqual([], self.view.errors)),
                       until=lambda: view.haveData(0) and \
                            self.view.haveData(0, 3))
-        self.assertEqual(u'Benjamin', view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Charly', self.view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
-        self.assertEqual(u'Abraham', self.view.contacts[2]['structured-name']['given'])
+        self.assertEqual('Benjamin', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Charly', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', self.view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Abraham', self.view.contacts[2]['structured-name']['given'])
 
     @timeout(60)
     @property("ENV", "LC_TYPE=de_DE.UTF-8 LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8")
@@ -3782,14 +3781,14 @@ END:VCARD''']):
         #
         # The names are chosen so that sorting by first name and sorting by last name needs to
         # reverse the list.
-        for i, contact in enumerate([u'''BEGIN:VCARD
+        for i, contact in enumerate(['''BEGIN:VCARD
 VERSION:3.0
 N:Zoo;Abraham
 FN:Abraham Zoo
 NICKNAME:Ace
 END:VCARD''',
 
-u'''BEGIN:VCARD
+'''BEGIN:VCARD
 VERSION:3.0
 N:Yeah;Benjamin
 END:VCARD''',
@@ -3797,7 +3796,7 @@ END:VCARD''',
 # Chárleß has chárless as representation after folding the case.
 # This is different from lower case.
 # See http://www.boost.org/doc/libs/1_51_0/libs/locale/doc/html/glossary.html#term_case_folding
-u'''BEGIN:VCARD
+'''BEGIN:VCARD
 VERSION:3.0
 FN:Charly 'Chárleß' Xing
 N:Xing;Charly
@@ -3829,10 +3828,10 @@ END:VCARD''']):
                                      self.assertEqual([], self.view.errors)),
                       until=lambda: view.haveData(0) and \
                            self.view.haveData(0, 3))
-        self.assertEqual(u'Abraham', view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
-        self.assertEqual(u'Charly', self.view.contacts[2]['structured-name']['given'])
+        self.assertEqual('Abraham', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', self.view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Charly', self.view.contacts[2]['structured-name']['given'])
 
         # Remove Abraham. Gets replaced by Benjamin in the view.
         self.runCmdline(['--delete-items', '@' + self.managerPrefix + self.uid, 'local', luids[0]])
@@ -3845,16 +3844,16 @@ END:VCARD''']):
                                      self.assertEqual([], self.view.errors)),
                       until=lambda: view.haveData(0) and \
                            self.view.haveData(0, 2))
-        self.assertEqual(u'Benjamin', view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Benjamin', self.view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Charly', self.view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Benjamin', view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Charly', self.view.contacts[1]['structured-name']['given'])
 
         # Remove Benjamin.
         self.runCmdline(['--delete-items', '@' + self.managerPrefix + self.uid, 'local', luids[1]])
         self.runUntil('view without Benjamin',
                       check=lambda: self.assertEqual([], view.errors),
                       until=lambda: len(view.contacts) == 0 and len(self.view.contacts) == 1)
-        self.assertEqual(u'Charly', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Charly', self.view.contacts[0]['structured-name']['given'])
 
     @timeout(60)
     @property("snapshot", "simple-sort")
@@ -3939,14 +3938,14 @@ END:VCARD''']):
                   ],
              }
 
-        with self.assertRaisesRegexp(dbus.DBusException,
+        with self.assertRaisesRegex(dbus.DBusException,
                                      r'.*: only the system address book is writable'):
              self.manager.AddContact('no-such-address-book',
                                      john)
 
         # Add new contact.
         localID = self.manager.AddContact('', john)
-        john['source'] = [('', unicode(localID))]
+        john['source'] = [('', str(localID))]
 
         self.runUntil('view with one contact',
                       check=lambda: self.assertEqual([], self.view.errors),
@@ -3960,7 +3959,7 @@ END:VCARD''']):
         john['id'] = contact.get('id', '<???>')
         self.assertEqual(john, contact, sortLists=True)
 
-        with self.assertRaisesRegexp(dbus.DBusException,
+        with self.assertRaisesRegex(dbus.DBusException,
                                      r'''.*: contact with local ID 'no-such-local-id' not found in system address book'''):
              self.manager.ModifyContact('',
                                         'no-such-local-id',
@@ -4107,7 +4106,7 @@ END:VCARD''']):
         #
         # The names are chosen so that sorting by first name and sorting by last name needs to
         # reverse the list.
-        for i, contact in enumerate([u'''BEGIN:VCARD
+        for i, contact in enumerate(['''BEGIN:VCARD
 VERSION:3.0
 N:Zoo;Abraham
 NICKNAME:Ace
@@ -4118,13 +4117,13 @@ TEL:089/788899
 EMAIL:az@example.com
 END:VCARD''',
 
-u'''BEGIN:VCARD
+'''BEGIN:VCARD
 VERSION:3.0
 N:Yeah;Benjamin
 TEL:+49-89-788899
 END:VCARD''',
 
-u'''BEGIN:VCARD
+'''BEGIN:VCARD
 VERSION:3.0
 FN:Charly 'Chárleß' Xing
 N:Xing;Charly
@@ -4148,8 +4147,8 @@ END:VCARD''']):
         self.runUntil('phone results',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: self.view.haveData(0, 2))
-        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', self.view.contacts[1]['structured-name']['given'])
 
         # Wait for final results from folks. The same in this case.
         self.runUntil('phone results',
@@ -4160,8 +4159,8 @@ END:VCARD''']):
         self.runUntil('phone results',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: self.view.haveData(0, 2))
-        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', self.view.contacts[1]['structured-name']['given'])
 
         # Nothing changed when folks became active.
         self.assertEqual([
@@ -4183,7 +4182,7 @@ END:VCARD''']):
         #
         # The names are chosen so that sorting by first name and sorting by last name needs to
         # reverse the list.
-        for i, contact in enumerate([u'''BEGIN:VCARD
+        for i, contact in enumerate(['''BEGIN:VCARD
 VERSION:3.0
 N:Zoo;Abraham
 NICKNAME:Ace
@@ -4197,13 +4196,13 @@ END:VCARD''',
 # Extra space, breaks suffix match in EDS.
 # A more intelligent phone number search in EDS
 # will find this again.
-u'''BEGIN:VCARD
+'''BEGIN:VCARD
 VERSION:3.0
 N:Yeah;Benjamin
 TEL:+49-89-7888 99
 END:VCARD''',
 
-u'''BEGIN:VCARD
+'''BEGIN:VCARD
 VERSION:3.0
 FN:Charly 'Chárleß' Xing
 N:Xing;Charly
@@ -4232,9 +4231,9 @@ END:VCARD''']):
         self.runUntil('phone results',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: self.view.haveData(0, simpleSearch and 1 or 2))
-        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Abraham', self.view.contacts[0]['structured-name']['given'])
         if not simpleSearch:
-             self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
+             self.assertEqual('Benjamin', self.view.contacts[1]['structured-name']['given'])
 
         # Wait for final results from folks. Also finds Benjamin.
         self.runUntil('phone results',
@@ -4245,8 +4244,8 @@ END:VCARD''']):
         self.runUntil('phone results',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: self.view.haveData(0, 2))
-        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', self.view.contacts[1]['structured-name']['given'])
 
         if simpleSearch:
              # One contact added by folks.
@@ -4294,7 +4293,7 @@ END:VCARD''']):
         #
         # The names are chosen so that sorting by first name and sorting by last name needs to
         # reverse the list.
-        for i, contact in enumerate([u'''BEGIN:VCARD
+        for i, contact in enumerate(['''BEGIN:VCARD
 VERSION:3.0
 N:Zoo;Abraham
 NICKNAME:Ace
@@ -4305,13 +4304,13 @@ TEL:089/788899
 EMAIL:az@example.com
 END:VCARD''',
 
-u'''BEGIN:VCARD
+'''BEGIN:VCARD
 VERSION:3.0
 N:Yeah;Benjamin
 TEL:+49-89-788899
 END:VCARD''',
 
-u'''BEGIN:VCARD
+'''BEGIN:VCARD
 VERSION:3.0
 FN:Charly 'Chárleß' Xing
 N:Xing;Charly
@@ -4336,8 +4335,8 @@ END:VCARD''']):
         self.runUntil('phone results',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: self.view.haveData(0, 2))
-        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', self.view.contacts[1]['structured-name']['given'])
 
         # Wait for final results from folks. The same in this case.
         self.runUntil('phone results',
@@ -4348,8 +4347,8 @@ END:VCARD''']):
         self.runUntil('phone results',
                       check=lambda: self.assertEqual([], self.view.errors),
                       until=lambda: self.view.haveData(0, 2))
-        self.assertEqual(u'Abraham', self.view.contacts[0]['structured-name']['given'])
-        self.assertEqual(u'Benjamin', self.view.contacts[1]['structured-name']['given'])
+        self.assertEqual('Abraham', self.view.contacts[0]['structured-name']['given'])
+        self.assertEqual('Benjamin', self.view.contacts[1]['structured-name']['given'])
 
         # Nothing changed when folks became active.
         self.assertEqual([
@@ -4365,7 +4364,7 @@ END:VCARD''']):
         self.setUpView(search=None, peers=[], withSystemAddressBook=True)
 
         # Insert new contact.
-        for i, contact in enumerate([u'''BEGIN:VCARD
+        for i, contact in enumerate(['''BEGIN:VCARD
 VERSION:3.0
 FN:John Doe
 N:Doe;John
@@ -4407,7 +4406,7 @@ END:VCARD''',
                          self.view.events)
 
         # Expect an error, view should have been closed already.
-        with self.assertRaisesRegexp(dbus.DBusException,
+        with self.assertRaisesRegex(dbus.DBusException,
                                      "org.freedesktop.DBus.Error.UnknownMethod: .*"):
              self.view.close()
 

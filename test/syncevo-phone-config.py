@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!@PYTHON@
 #
 # Copyright (C) 2010 Intel Corporation
 #
@@ -23,7 +23,7 @@ SyncEvolution.
 '''
 import sys, optparse, os, time, tempfile
 import shutil
-import ConfigParser
+import configparser
 import glob
 import os.path
 
@@ -94,13 +94,13 @@ class ConfigurationParameter:
         self.identifier = identifier
 
     def printMe(self):
-        print "Test parameter: "
-        print "With CTCap:     %s" %(self.ctcap,)
-        print "Identifier:     %s" %(self.identifier,)
-        print "SyncML version: %s" %(self.version,)
-        print "Sync Source:    %s" %(self.source,)
-        print "URI:            %s" %(self.uri,)
-        print "Content Type:   %s" %(self.type,)
+        print("Test parameter: ")
+        print("With CTCap:     %s" %(self.ctcap,))
+        print("Identifier:     %s" %(self.identifier,))
+        print("SyncML version: %s" %(self.version,))
+        print("Sync Source:    %s" %(self.source,))
+        print("URI:            %s" %(self.uri,))
+        print("Content Type:   %s" %(self.type,))
 
     def __str__(self):
         res = []
@@ -249,10 +249,10 @@ def compareSyncData(sources, type):
         except:
             return False
         if (options.verbose > 1):
-            print "comparing received file:"
-            print received
-            print "with built in keywords in test case:"
-            print keys
+            print("comparing received file:")
+            print(received)
+            print("with built in keywords in test case:")
+            print(keys)
         for key in keys:
             if (received.find(key) <0):
                 return False
@@ -262,7 +262,7 @@ def compareSyncData(sources, type):
 def runCommand(cmd, exception = True):
     """Log and run the given command, throwing an exception if it fails."""
     if (options.verbose > 1):
-        print "%s: %s" % (os.getcwd(), cmd)
+        print("%s: %s" % (os.getcwd(), cmd))
     else:
         cmd += ' >/dev/null'
     sys.stdout.flush()
@@ -298,7 +298,7 @@ def runSync(sync):
             else:
                 return self.fp.readline()
 
-    ini = ConfigParser.ConfigParser({"status": "0", "error": ""})
+    ini = configparser.ConfigParser({"status": "0", "error": ""})
     ini.readfp(IniFile(resultFile))
     statuscode = ini.get("main", "status")
     if statuscode == "20015":
@@ -307,7 +307,7 @@ def runSync(sync):
         interrupt = True
     if statuscode == "22002":
         # syncevolution failed (for example, kill -9), warn and abort
-        print "\nSyncEvolution binary died prematurely, aborting testing."
+        print("\nSyncEvolution binary died prematurely, aborting testing.")
         status = False
         interrupt = True
     return (status, interrupt)
@@ -320,7 +320,7 @@ def rm_r(dirname):
 def hash2ini(hash):
     """convert key/value pairs into .ini file without sections"""
     res = []
-    for key, value in hash.items():
+    for key, value in list(hash.items()):
         res.append("%s = %s" % (key, value))
     return "\n".join(res)
 
@@ -399,29 +399,29 @@ class TestingConfiguration():
         # 3) we already found a working configuration for combined calendar and
         # task, thus seperate testing for calendar and task is not needed.
         skip = False
-        for source, config in self.wConfigs.items():
+        for source, config in list(self.wConfigs.items()):
             if (config):
                 if ( (config.source == self.source) or (config.identifier != self.identifier ) or (config.ctcap != self.ctcap) or (config.version != self.version)):
                     skip = True
         if (skip):
             if (options.verbose > 1):
-                print "Test %d/%d skipped because already found a working configuration" % (curconfig, allconfigs)
+                print("Test %d/%d skipped because already found a working configuration" % (curconfig, allconfigs))
             elif options.verbose > 0:
-                print "Test %d/%d skipped" %(curconfig, allconfigs), \
-                    ConfigurationParameter(self.version, self.source, self.uri, self.type, self.ctcap, self.identifier)
+                print("Test %d/%d skipped" %(curconfig, allconfigs), \
+                    ConfigurationParameter(self.version, self.source, self.uri, self.type, self.ctcap, self.identifier))
             else:
-                print "Test %d/%d skipped" %(curconfig, allconfigs)
+                print("Test %d/%d skipped" %(curconfig, allconfigs))
         else:
-            print ("Start %d/%d test" % (curconfig, allconfigs)),
+            print(("Start %d/%d test" % (curconfig, allconfigs)), end=' ')
             if (options.verbose > 0):
                 config = ConfigurationParameter(self.version, self.source, self.uri, self.type, self.ctcap, self.identifier)
                 if (options.verbose > 1):
-                    print
+                    print()
                     config.printMe()
                 else:
-                    print config
+                    print(config)
             else:
-                print
+                print()
 
         return skip
 
@@ -526,7 +526,7 @@ class TestingConfiguration():
                         for self.uri in self.uris[self.source]:
                             for self.type in self.types[self.source]:
                                 allconfigs +=1
-        print "Starting test for %d configurations..." %(allconfigs,)
+        print("Starting test for %d configurations..." %(allconfigs,))
 
         curconfig = 0
         self.wConfigs = {}
@@ -557,33 +557,33 @@ class TestingConfiguration():
                                    (status, interrupt) = self.testWithCurrentConfiguration ()
                                    if (status and not interrupt):
                                        self.wConfigs[self.source] = ConfigurationParameter (self.version, self.source, self.uri, self.type, self.ctcap, self.identifier)
-                                       print "Found a working configuration for %s" % (self.source,)
+                                       print("Found a working configuration for %s" % (self.source,))
                                        if (options.verbose > 0):
                                            self.wConfigs[self.source].printMe()
                                if (interrupt):
                                    break;
         if(interrupt):
-            print "Test Interrupted"
+            print("Test Interrupted")
             return 1
 
-        print "Test Ended"
+        print("Test Ended")
 
         #Test finished, print summary and generating configurations
-        print "****************SUMMARY****************"
+        print("****************SUMMARY****************")
         found = False
-        for source,config in self.wConfigs.items():
+        for source,config in list(self.wConfigs.items()):
             if (config):
                 found = True
-                print "------------------------------------------"
-                print "Configuration parameter for %s:" % (source,)
+                print("------------------------------------------")
+                print("Configuration parameter for %s:" % (source,))
                 config.printMe()
 
         if (not found):
-            print "No working configuration found"
+            print("No working configuration found")
         else:
             have_combined = \
-                self.wConfigs.has_key('calendar') and \
-                self.wConfigs.has_key('todo') and \
+                'calendar' in self.wConfigs and \
+                'todo' in self.wConfigs and \
                 self.wConfigs['calendar'] and \
                 self.wConfigs['todo'] and \
                 self.wConfigs['calendar'].uri == self.wConfigs['todo'].uri
@@ -606,7 +606,7 @@ class TestingConfiguration():
                     runCommand(cmd)
 
                 syncCreated = False
-                for source,config in self.wConfigs.items():
+                for source,config in list(self.wConfigs.items()):
                     if (config):
                         if (not syncCreated):
                             #set the sync parameter
@@ -628,17 +628,17 @@ class TestingConfiguration():
 
 
             if (options.advanced):
-                print ""
-                print "We have conducted basic test by sending and receiving"
-                print "data to the phone. You can help the SyncEvolution project"
-                print "and other users by submitting the following configuration"
-                print "template at http://syncevolution.org/wiki/phone-compatibility-template"
-                print ""
+                print("")
+                print("We have conducted basic test by sending and receiving")
+                print("data to the phone. You can help the SyncEvolution project")
+                print("and other users by submitting the following configuration")
+                print("template at http://syncevolution.org/wiki/phone-compatibility-template")
+                print("")
 
                 configini = { "peerIsClient": "1" }
                 sourceConfigInis = {}
 
-                for source,config in self.wConfigs.items():
+                for source,config in list(self.wConfigs.items()):
                     if(config):
                         sourceini = {}
                         if (config.identifier):
@@ -667,27 +667,27 @@ class TestingConfiguration():
 
                 # print template to stdout
                 sep = "--------------------> snip <--------------------"
-                print sep
-                print "=== template.ini ==="
-                print "fingerprint = <Model> <Manufacturer>"
-                print "=== config.ini ==="
-                print hash2ini(configini)
-                print "consumerReady = 1"
-                for source, configini in sourceConfigInis.items():
-                    print "=== sources/%s/config.ini ===" % source
-                    print hash2ini(configini)
-                print sep
+                print(sep)
+                print("=== template.ini ===")
+                print("fingerprint = <Model> <Manufacturer>")
+                print("=== config.ini ===")
+                print(hash2ini(configini))
+                print("consumerReady = 1")
+                for source, configini in list(sourceConfigInis.items()):
+                    print("=== sources/%s/config.ini ===" % source)
+                    print(hash2ini(configini))
+                print(sep)
             else:
-                print ""
-                print "We just conducted minimum test by syncing with the phone"
-                print "without checking received data. For more reliable result,"
-                print "use the --advanced option, but beware that it will overwrite"
-                print "contacts, events, tasks and memos on the phone."
+                print("")
+                print("We just conducted minimum test by syncing with the phone")
+                print("without checking received data. For more reliable result,")
+                print("use the --advanced option, but beware that it will overwrite")
+                print("contacts, events, tasks and memos on the phone.")
 
             if (options.create):
-                print ""
-                print "Created configuration: %s" %(options.create)
-                print "You may start syncing with: syncevolution %s" %(options.create)
+                print("")
+                print("Created configuration: %s" %(options.create))
+                print("You may start syncing with: syncevolution %s" %(options.create))
 
 def main():
     versions = []
@@ -721,7 +721,7 @@ def main():
     testFolder = tmpdir+'/data'
     testResult = tmpdir+'/cache'
     testConfig = tmpdir+'/config'
-    print "Running test with test data inside %s and test results inside %s" %(testFolder, testResult)
+    print("Running test with test data inside %s and test results inside %s" %(testFolder, testResult))
     config.run()
 
 if __name__ == "__main__":

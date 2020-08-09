@@ -1,4 +1,4 @@
-#! /usr/bin/python
+#!@PYTHON@
 
 '''Usage: syncevo-http-server.py <URL>
 Runs a SyncML HTTP server under the given base URL.'''
@@ -10,9 +10,8 @@ DBusGMainLoop(set_as_default=True)
 glib2reactor.install()
 
 import dbus
-import gobject
 import sys
-import urlparse
+import urllib.parse
 import optparse
 import os
 import atexit
@@ -132,13 +131,13 @@ class SyncMLSession:
         then remove the session'''
         logger.debug("destructing connection %s with code %s message %s", self.conpath, code, message)
         if self.request:
-            self.request.setResponseCode(code, message)
+            self.request.setResponseCode(code, message.encode())
             self.request.finish()
             self.request = None
         if self.connection:
             try:
                 self.connection.Close(False, message, timeout=timeout)
-            except dbus.exceptions.DBusException, ex:
+            except dbus.exceptions.DBusException as ex:
                 if ex.get_dbus_name() == "org.freedesktop.DBus.Error.UnknownMethod":
                     # triggered if connection instance is already gone, hide from user
                     logger.debug("self.connection.Close() failed, connection probably already gone: %s", ex)
@@ -180,7 +179,7 @@ class SyncMLSession:
             OldRequest.type = type
             if request:
                 request.setHeader('Content-Type', type)
-                request.setHeader('Content-Length', len(data))
+                request.setHeader('Content-Length', str(len(data)))
                 request.setResponseCode(http.OK)
                 request.write(data)
                 request.finish()
@@ -244,7 +243,6 @@ class SyncMLSession:
                                         'org.syncevolution',
                                         self.conpath,
                                         path_keyword='conpath',
-                                        utf8_strings=True,
                                         byte_arrays=True)
         self.reply_match = \
         Context.bus.add_signal_receiver(self.reply,
@@ -253,7 +251,6 @@ class SyncMLSession:
                                         'org.syncevolution',
                                         self.conpath,
                                         path_keyword='conpath',
-                                        utf8_strings=True,
                                         byte_arrays=True)
 
         # feed new data into SyncEvolution and wait for reply
@@ -320,16 +317,16 @@ class SyncMLPost(resource.Resource):
             config = ""
         type = request.getHeader('content-type')
         len = request.getHeader('content-length')
-        sessionid = request.args.get('sessionid')
+        sessionid = request.args.get(b'sessionid')
         if sessionid:
-            sessionid = sessionid[0]
+            sessionid = sessionid[0].decode()
         logger.debug("POST from %s config %s type %s session %s args %s length %s",
                      request.getClientIP(), config, type, sessionid, request.args, len)
         if not sessionid:
             logger.info("new SyncML session for %s", request.getClientIP())
             session = SyncMLSession()
             session.start(request, config,
-                          urlparse.urljoin(self.url.geturl(), request.path))
+                          urllib.parse.urljoin(self.url.geturl(), request.path.decode()))
             return server.NOT_DONE_YET
         else:
             data = request.content.read()
@@ -536,7 +533,7 @@ syncevo-http-server itself is installed""")
                             # use this X11 session to find D-Bus session bus
                             os.environ["DISPLAY"] = dpy
                             havedbus = True
-            except dbus.exceptions.DBusException, ex:
+            except dbus.exceptions.DBusException as ex:
                 if ex.get_dbus_name() == "org.freedesktop.DBus.Error.ServiceUnknown":
                     logger.debug("org.freedesktop.ConsoleKit service not available")
                 else:
@@ -586,9 +583,9 @@ syncevo-http-server itself is installed""")
         logger.error("need exactly on URL as command line parameter")
         exit(1)
 
-    url = urlparse.urlparse(args[0])
+    url = urllib.parse.urlparse(args[0])
     root = resource.Resource()
-    root.putChild(url.path[1:], SyncMLPost(url))
+    root.putChild(url.path[1:].encode(), SyncMLPost(url))
     site = server.Site(root)
     if url.scheme == "https":
         if not options.cert:

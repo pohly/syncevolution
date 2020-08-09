@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 """
 Converts source code (first parameter, can be - for stdin) to HTML
@@ -29,8 +29,8 @@ try:
     pygments.highlight(code, lexer, formatter, out)
 except:
     import cgi
-    print >>sys.stderr, "source2html.py failed with pygments:", sys.exc_info()
-    print >>sys.stderr, "falling back to internal code"
+    print("source2html.py failed with pygments:", sys.exc_info(), file=sys.stderr)
+    print("falling back to internal code", file=sys.stderr)
 
     out.write('''<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
 <html>
