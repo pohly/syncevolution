@@ -942,7 +942,11 @@ void EvolutionContactSource::flushItemChanges()
             }
         };
         SYNCEVO_GLIB_CALL_ASYNC(e_book_client_add_contacts, process,
-                                m_addressbook, contacts, nullptr);
+                                m_addressbook, contacts,
+#ifdef HAVE_E_BOOK_OPERATION_FLAGS
+                                E_BOOK_OPERATION_FLAG_NONE,
+#endif
+                                nullptr);
     }
     if (!m_batchedUpdate.empty()) {
         SE_LOG_DEBUG(getDisplayName(), "batch update of %d contacts starting", (int)m_batchedUpdate.size());
@@ -976,7 +980,11 @@ void EvolutionContactSource::flushItemChanges()
             }
         };
         SYNCEVO_GLIB_CALL_ASYNC(e_book_client_modify_contacts, process,
-                                m_addressbook, contacts, nullptr);
+                                m_addressbook, contacts,
+#ifdef HAVE_E_BOOK_OPERATION_FLAGS
+                                E_BOOK_OPERATION_FLAG_NONE,
+#endif
+                                nullptr);
     }
 }
 
@@ -1009,14 +1017,22 @@ EvolutionContactSource::insertItem(const string &uid, const std::string &item, b
         case SYNCHRONOUS:
             if (uid.empty()) {
                 gchar* newuid;
-                if (!e_book_client_add_contact_sync(m_addressbook, contact, &newuid, nullptr, gerror)) {
+                if (!e_book_client_add_contact_sync(m_addressbook, contact,
+#ifdef HAVE_E_BOOK_OPERATION_FLAGS
+                                                    E_BOOK_OPERATION_FLAG_NONE,
+#endif
+                                                    &newuid, nullptr, gerror)) {
                     throwError(SE_HERE, "add new contact", gerror);
                 }
                 PlainGStr newuidPtr(newuid);
                 string newrev = getRevision(newuid);
                 return InsertItemResult(newuid, newrev, ITEM_OKAY);
             } else {
-                if (!e_book_client_modify_contact_sync(m_addressbook, contact, nullptr, gerror)) {
+                if (!e_book_client_modify_contact_sync(m_addressbook, contact,
+#ifdef HAVE_E_BOOK_OPERATION_FLAGS
+                                                       E_BOOK_OPERATION_FLAG_NONE,
+#endif
+                                                       nullptr, gerror)) {
                     throwError(SE_HERE, "updating contact "+ uid, gerror);
                 }
                 string newrev = getRevision(uid);
@@ -1074,7 +1090,11 @@ void EvolutionContactSource::removeItem(const string &uid)
     if (
 #ifdef USE_EDS_CLIENT
         (invalidateCachedContact(uid),
-         !e_book_client_remove_contact_by_uid_sync(m_addressbook, uid.c_str(), nullptr, gerror))
+         !e_book_client_remove_contact_by_uid_sync(m_addressbook, uid.c_str(),
+#ifdef HAVE_E_BOOK_OPERATION_FLAGS
+                                                   E_BOOK_OPERATION_FLAG_NONE,
+#endif
+                                                   nullptr, gerror))
 #else
         !e_book_remove_contact(m_addressbook, uid.c_str(), gerror)
 #endif

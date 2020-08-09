@@ -134,6 +134,9 @@ class EvolutionCalendarSource : public EvolutionSyncSource,
      */
     static ItemID getItemID(ECalComponent *ecomp);
     static ItemID getItemID(icalcomponent *icomp);
+    #ifdef HAVE_LIBECAL_2_0
+    static ItemID getItemID(ICalComponent *icomp);
+    #endif
 
     /**
      * Extract modification string from calendar item.
@@ -141,6 +144,9 @@ class EvolutionCalendarSource : public EvolutionSyncSource,
      */
     static string getItemModTime(ECalComponent *ecomp);
     static string getItemModTime(icalcomponent *icomp);
+    #ifdef HAVE_LIBECAL_2_0
+    static string getItemModTime(ICalComponent *icomp);
+    #endif
 
   protected:
     //
@@ -196,18 +202,30 @@ class EvolutionCalendarSource : public EvolutionSyncSource,
      *
      * caller has to free result
      */
+#ifdef HAVE_LIBECAL_2_0
+    ICalComponent *retrieveItem(const ItemID &id);
+#else
     icalcomponent *retrieveItem(const ItemID &id);
+#endif
 
     /** retrieve the item with the given luid as VCALENDAR string - may throw exception */
     string retrieveItemAsString(const ItemID &id);
 
 
     /** returns the type which the ical library uses for our components */
+#ifdef HAVE_LIBECAL_2_0
+    ICalComponentKind getCompType() {
+        return m_type == EVOLUTION_CAL_SOURCE_TYPE_EVENTS ? I_CAL_VEVENT_COMPONENT :
+            m_type == EVOLUTION_CAL_SOURCE_TYPE_MEMOS ? I_CAL_VJOURNAL_COMPONENT :
+            I_CAL_VTODO_COMPONENT;
+    }
+#else
     icalcomponent_kind getCompType() {
         return m_type == EVOLUTION_CAL_SOURCE_TYPE_EVENTS ? ICAL_VEVENT_COMPONENT :
             m_type == EVOLUTION_CAL_SOURCE_TYPE_MEMOS ? ICAL_VJOURNAL_COMPONENT :
             ICAL_VTODO_COMPONENT;
     }
+#endif
 
 #ifndef USE_EDS_CLIENT
     /** ECalAuthFunc which calls the authenticate() methods */
@@ -239,6 +257,9 @@ class EvolutionCalendarSource : public EvolutionSyncSource,
      * Convert to string in canonical representation.
      */
     static string icalTime2Str(const struct icaltimetype &tt);
+#ifdef HAVE_LIBECAL_2_0
+    static string icalTime2Str(const ICalTime *tt);
+#endif
 
     /**
      * A set of all existing objects. Initialized in the last call to
@@ -263,7 +284,11 @@ class EvolutionCalendarSource : public EvolutionSyncSource,
      * will destroy the smart pointer, which then calls
      * icalcomponent_free().
      */
+#ifdef HAVE_LIBECAL_2_0
+    typedef list< std::shared_ptr< eptr<ICalComponent> > > ICalComps_t;
+#else
     typedef list< std::shared_ptr< eptr<icalcomponent> > > ICalComps_t;
+#endif
 
     /**
      * Utility function which extracts all icalcomponents with
