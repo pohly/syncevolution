@@ -338,12 +338,14 @@ public:
         rm_r(current);
         mkdir_p(current);
         rm_r("Client_Sync_Current");
-        symlink(current.c_str(), "Client_Sync_Current");
+        auto err = symlink(current.c_str(), "Client_Sync_Current");
+        if (err != 0) {
+                SE_LOG_WARNING(NULL, "symlink to %s: %s", current.c_str(), strerror(errno));
+        }
 
         string server = getenv("CLIENT_TEST_SERVER") ? getenv("CLIENT_TEST_SERVER") : "funambol";
         server += "_";
         server += m_clientID;
-        
 
         class ClientTest : public CmdlineSyncClient {
         public:
