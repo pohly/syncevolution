@@ -29,15 +29,7 @@ src_backends_evolution_syncebook_src = \
   src/backends/evolution/EvolutionContactSource.h \
   src/backends/evolution/EvolutionContactSource.cpp
 
-# SYNCEVO_WFLAGS_DEPRECATED is needed here because on Ubuntu Eoan, EDS itself uses
-# a deprecated type:
-# In file included from /usr/include/evolution-data-server/libedataserver/libedataserver.h:32,
-#                 from /srv/runtests/work/sources/syncevolution/src/syncevo/EDSClient.h:31,
-#                 from /srv/runtests/work/sources/syncevolution/src/syncevo/EDSClient.cpp:20:
-#/usr/include/evolution-data-server/libedataserver/e-flag.h:54:26: error: 'GTimeVal' is deprecated: Use 'GDateTime' instead [-Werror=deprecated-declarations]
-#   54 |        GTimeVal *abs_time);
 src_backends_evolution_cppflags = \
-  $(SYNCEVO_WFLAGS_DEPRECATED) \
   $(SYNCEVOLUTION_CFLAGS) \
   -I$(top_srcdir)/test \
   $(BACKEND_CPPFLAGS) \
