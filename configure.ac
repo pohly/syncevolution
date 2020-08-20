@@ -83,9 +83,13 @@ AX_BOOST_BASE(1.34)
 # TODO: Fix code to pass with -pedantic -Wextra.
 # -Wno-unknown-pragmas needed because icalstrdup.h
 # currently uses the "#pragma }" trick. Should remove that.
+# -Wno-deprecated-declarations is needed everywhere (i.e. not just in certain
+# modules, like SYNCEVO_WFLAGS_DEPRECATED) because EDS on Ubuntu Eon uses
+# the deprecated GDateTime in its header, which we included through our
+# EDS/libical wrapper even when not actually used.
 DK_ARG_ENABLE_WARNINGS([SYNCEVO_WFLAGS],
                        [-Wall -Wno-unknown-pragmas],
-                       [-Wall -Wno-unknown-pragmas],
+                       [-Wall -Wno-unknown-pragmas -Wno-deprecated-declarations],
                        [])
 
 # Fix code to work without deprecated methods: G GDK GDK_PIXBUF CAIRO PANGO GTK
