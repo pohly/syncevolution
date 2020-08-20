@@ -42,6 +42,63 @@ static const string
 EVOLUTION_CALENDAR_PRODID("PRODID:-//ACME//NONSGML SyncEvolution//EN"),
 EVOLUTION_CALENDAR_VERSION("VERSION:2.0");
 
+// CalComponent is a smart pointer which wraps either an icalcomponent (libecal < 2.0)
+// or a ICalComponent (libical >= 2.0). For ICalComponent, it always owns
+// the object. For ICalComponent, that is the default, but can be overridden.
+class CalComponent : private boost::noncopyable {
+public:
+#ifdef HAVE_LIBECAL_2_0
+    typedef ICalComponent T;
+#else
+    typedef icalcomponent T;
+#endif
+
+    CalComponent(T *component = nullptr, bool owned = true) : m_component(component), m_owned(owned) {}
+    ~CalComponent() { free(); }
+    CalComponent & operator = (T *component) {
+        free();
+        m_component = component;
+        return *this;
+    }
+    operator T * () { return m_component; }
+    operator bool () { return m_component != 0; }
+    T * Steal() { T *component = m_component; m_component = nullptr; return component; }
+
+#ifdef HAVE_LIBECAL_2_0
+    static T *new_from_string(const char *str) { return i_cal_component_new_from_string(str); }
+    static const auto VTIMEZONE_COMPONENT = I_CAL_VTIMEZONE_COMPONENT;
+    static T *get_first_component(T *comp, ICalComponentKind what) { return i_cal_component_get_first_component(comp, what); }
+    static T *get_next_component(T *comp, ICalComponentKind what) { return i_cal_component_get_next_component(comp, what); }
+#else
+    static T *new_from_string(const char *str) { return icalcomponent_new_from_string(str); }
+    static const auto VTIMEZONE_COMPONENT = ICAL_VTIMEZONE_COMPONENT;
+    static T *get_first_component(T *comp, icalcomponent_kind what) { return icalcomponent_get_first_component(comp, what); }
+    static T *get_next_component(T *comp, icalcomponent_kind what) { return icalcomponent_get_next_component(comp, what); }
+#endif
+
+private:
+    T *m_component;
+    bool m_owned;
+
+    void free() {
+        if (m_component) {
+#ifdef HAVE_LIBECAL_2_0
+            g_object_unref(m_component);
+#else
+            if (m_owned) {
+                icalcomponent_free(m_component);
+            }
+#endif
+        }
+    }
+};
+
+#ifdef HAVE_LIBECAL_2_0
+typedef ICalTimezone CalTimezone;
+#else
+typedef icaltimezone CalTimezone;
+#endif
+
 bool EvolutionCalendarSource::LUIDs::containsLUID(const ItemID &id) const
 {
     const_iterator it = findUID(id.m_uid);
@@ -375,11 +432,7 @@ void EvolutionCalendarSource::listAllItems(RevisionMap_t &revisions)
         const GSList *l;
 
         for (l = objects; l; l = l->next) {
-#ifdef HAVE_LIBECAL_2_0
-            ICalComponent *icomp = (ICalComponent*)l->data;
-#else
-            icalcomponent *icomp = (icalcomponent*)l->data;
-#endif
+            CalComponent icomp((CalComponent::T *)l->data, false);
             EvolutionCalendarSource::ItemID id = EvolutionCalendarSource::getItemID(icomp);
             string luid = id.getLUID();
             string modTime = EvolutionCalendarSource::getItemModTime(icomp);
@@ -433,11 +486,7 @@ void EvolutionCalendarSource::readItem(const string &luid, std::string &item, bo
 }
 
 #ifdef USE_EDS_CLIENT
-#ifdef HAVE_LIBECAL_2_0
-ICalTimezone *
-#else /* HAVE_LIBECAL_2_0 */
-icaltimezone *
-#endif /* HAVE_LIBECAL_2_0 */
+CalTimezone *
 my_tzlookup(const gchar *tzid,
 #ifdef HAVE_LIBECAL_2_0
             gpointer ecalclient,
@@ -447,11 +496,7 @@ my_tzlookup(const gchar *tzid,
             GCancellable *cancellable,
             GError **error)
 {
-#ifdef HAVE_LIBECAL_2_0
-    ICalTimezone *zone = nullptr;
-#else
-    icaltimezone *zone = nullptr;
-#endif
+    CalTimezone *zone = nullptr;
     GError *local_error = nullptr;
 
     if (e_cal_client_get_timezone_sync((ECalClient *)ecalclient, tzid, &zone, cancellable, &local_error)) {
@@ -509,11 +554,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
         SE_LOG_DEBUG(getDisplayName(), "after replacing , with \\, in CATEGORIES:\n%s", data.c_str());
     }
 
-#ifdef HAVE_LIBECAL_2_0
-    eptr<ICalComponent> icomp(i_cal_component_new_from_string((char *)data.c_str()));
-#else
-    eptr<icalcomponent> icomp(icalcomponent_new_from_string((char *)data.c_str()));
-#endif
+    eptr<CalComponent::T> icomp(CalComponent::new_from_string((char *)data.c_str()));
 
     if( !icomp ) {
         throwError(SE_HERE, string("failure parsing ical") + data);
@@ -553,16 +594,13 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
 
     // insert before adding/updating the event so that the new VTIMEZONE is
     // immediately available should anyone want it
-#ifdef HAVE_LIBECAL_2_0
-    for (ICalComponent *tcomp = i_cal_component_get_first_component(icomp, I_CAL_VTIMEZONE_COMPONENT);
+    for (CalComponent tcomp(CalComponent::get_first_component(icomp, CalComponent::VTIMEZONE_COMPONENT), false);
          tcomp;
-         g_object_unref (tcomp), tcomp = i_cal_component_get_next_component(icomp, I_CAL_VTIMEZONE_COMPONENT)) {
+         tcomp = CalComponent::get_next_component(icomp, CalComponent::VTIMEZONE_COMPONENT)) {
+#ifdef HAVE_LIBECAL_2_0
         eptr<ICalTimezone> zone(i_cal_timezone_new(), "icaltimezone");
         i_cal_timezone_set_component(zone, tcomp);
 #else
-    for (icalcomponent *tcomp = icalcomponent_get_first_component(icomp, ICAL_VTIMEZONE_COMPONENT);
-         tcomp;
-         tcomp = icalcomponent_get_next_component(icomp, ICAL_VTIMEZONE_COMPONENT)) {
         eptr<icaltimezone> zone(icaltimezone_new(), "icaltimezone");
         icaltimezone_set_component(zone, tcomp);
 #endif
@@ -596,14 +634,9 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
     // the component to update/add must be the
     // ICAL_VEVENT/VTODO_COMPONENT of the item,
     // e_cal_create/modify_object() fail otherwise
-#ifdef HAVE_LIBECAL_2_0
-    ICalComponent *subcomp = i_cal_component_get_first_component(icomp,
-                                                                 getCompType());
-#else
-    icalcomponent *subcomp = icalcomponent_get_first_component(icomp,
-                                                               getCompType());
-#endif
-
+    CalComponent subcomp(CalComponent::get_first_component(icomp,
+                                                           getCompType()),
+                         false);
     if (!subcomp) {
         throwError(SE_HERE, "extracting event");
     }
@@ -695,11 +728,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
 
                 // Recreate any children removed earlier: when we get here,
                 // the parent exists and we must update it.
-#ifdef HAVE_LIBECAL_2_0
-                for (std::shared_ptr< eptr<ICalComponent> > &icalcomp: children) {
-#else
-                for (std::shared_ptr< eptr<icalcomponent> > &icalcomp: children) {
-#endif
+                for (std::shared_ptr< eptr<CalComponent::T> > &icalcomp: children) {
                     if (
 #ifdef USE_EDS_CLIENT
                         !e_cal_client_modify_object_sync(m_calendar, *icalcomp,
@@ -819,11 +848,7 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
 
                 // Recreate any children removed earlier: when we get here,
                 // the parent exists and we must update it.
-#ifdef HAVE_LIBECAL_2_0
-                for (std::shared_ptr< eptr<ICalComponent> > &icalcomp: children) {
-#else
-                for (std::shared_ptr< eptr<icalcomponent> > &icalcomp: children) {
-#endif
+                for (std::shared_ptr< eptr<CalComponent::T> > &icalcomp: children) {
                     if (
 #ifdef USE_EDS_CLIENT
                         !e_cal_client_modify_object_sync(m_calendar, *icalcomp,
@@ -888,11 +913,6 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
         modTime = getItemModTime(newid);
     }
 
-#ifdef HAVE_LIBECAL_2_0
-    // TODO: this object leaks when an exception is thrown. Store in smart pointer.
-    g_clear_object(&subcomp);
-#endif
-
     return InsertItemResult(newluid, modTime, state);
 }
 
@@ -904,24 +924,11 @@ EvolutionCalendarSource::ICalComps_t EvolutionCalendarSource::removeEvents(const
     if (it != m_allLUIDs.end()) {
         for (const string &rid: it->second) {
             ItemID id(uid, rid);
-#ifdef HAVE_LIBECAL_2_0
-            ICalComponent *icomp = retrieveItem(id);
-#else
-            icalcomponent *icomp = retrieveItem(id);
-#endif
+            // Always free the component unless we explicitly steal it.
+            CalComponent icomp(retrieveItem(id), true);
             if (icomp) {
-                if (id.m_rid.empty() && returnOnlyChildren) {
-#ifdef HAVE_LIBECAL_2_0
-                    g_clear_object(&icomp);
-#else
-                    icalcomponent_free(icomp);
-#endif
-                } else {
-#ifdef HAVE_LIBECAL_2_0
-                    events.push_back(ICalComps_t::value_type(new eptr<ICalComponent>(icomp)));
-#else
-                    events.push_back(ICalComps_t::value_type(new eptr<icalcomponent>(icomp)));
-#endif
+                if (!id.m_rid.empty() || !returnOnlyChildren) {
+                    events.push_back(ICalComps_t::value_type(new eptr<CalComponent::T>(icomp.Steal())));
                 }
             }
         }
@@ -976,11 +983,7 @@ void EvolutionCalendarSource::removeItem(const string &luid)
 
         // recreate children
         bool first = true;
-#ifdef HAVE_LIBECAL_2_0
-        for (std::shared_ptr< eptr<ICalComponent> > &icalcomp: children) {
-#else
-        for (std::shared_ptr< eptr<icalcomponent> > &icalcomp: children) {
-#endif
+        for (std::shared_ptr< eptr<CalComponent::T> > &icalcomp: children) {
             if (first) {
                 char *uid;
 
@@ -1025,11 +1028,7 @@ void EvolutionCalendarSource::removeItem(const string &luid)
         // workaround for EDS 2.32 API semantic: succeeds even if
         // detached recurrence doesn't exist and adds EXDATE,
         // therefore we have to check for existence first
-#ifdef HAVE_LIBECAL_2_0
-        eptr<ICalComponent> item(retrieveItem(id));
-#else
-        eptr<icalcomponent> item(retrieveItem(id));
-#endif
+        eptr<CalComponent::T> item(retrieveItem(id));
         gboolean success = !item ? false :
 #ifdef USE_EDS_CLIENT
             // TODO: is this necessary?
@@ -1085,18 +1084,11 @@ void EvolutionCalendarSource::removeItem(const string &luid)
     }
 }
 
-#ifdef HAVE_LIBECAL_2_0
-ICalComponent *EvolutionCalendarSource::retrieveItem(const ItemID &id)
-#else
-icalcomponent *EvolutionCalendarSource::retrieveItem(const ItemID &id)
-#endif
+// The caller owns the item.
+CalComponent::T *EvolutionCalendarSource::retrieveItem(const ItemID &id)
 {
     GErrorCXX gerror;
-#ifdef HAVE_LIBECAL_2_0
-    ICalComponent *comp = nullptr;
-#else
-    icalcomponent *comp = nullptr;
-#endif
+    CalComponent::T *comp = nullptr;
 
     if (
 #ifdef USE_EDS_CLIENT
@@ -1123,11 +1115,7 @@ icalcomponent *EvolutionCalendarSource::retrieveItem(const ItemID &id)
     if (!comp) {
         throwError(SE_HERE, string("retrieving item: ") + id.getLUID());
     }
-#ifdef HAVE_LIBECAL_2_0
-    eptr<ICalComponent> ptr(comp);
-#else
-    eptr<icalcomponent> ptr(comp);
-#endif
+    eptr<CalComponent::T> ptr(comp);
 
     /*
      * EDS bug: if a parent doesn't exist while a child does, and we ask
@@ -1153,11 +1141,7 @@ icalcomponent *EvolutionCalendarSource::retrieveItem(const ItemID &id)
 
 string EvolutionCalendarSource::retrieveItemAsString(const ItemID &id)
 {
-#ifdef HAVE_LIBECAL_2_0
-    eptr<ICalComponent> comp(retrieveItem(id));
-#else
-    eptr<icalcomponent> comp(retrieveItem(id));
-#endif
+    eptr<CalComponent::T> comp(retrieveItem(id));
     eptr<char> icalstr;
 
 #ifdef USE_EDS_CLIENT
@@ -1242,11 +1226,7 @@ string EvolutionCalendarSource::retrieveItemAsString(const ItemID &id)
 std::string EvolutionCalendarSource::getDescription(const string &luid)
 {
     try {
-#ifdef HAVE_LIBECAL_2_0
-        eptr<ICalComponent> comp(retrieveItem(ItemID(luid)));
-#else
-        eptr<icalcomponent> comp(retrieveItem(ItemID(luid)));
-#endif
+        eptr<CalComponent::T> comp(retrieveItem(ItemID(luid)));
         std::string descr;
 
 #ifdef HAVE_LIBECAL_2_0
@@ -1334,11 +1314,7 @@ EvolutionCalendarSource::ItemID::ItemID(const string &luid)
 
 EvolutionCalendarSource::ItemID EvolutionCalendarSource::getItemID(ECalComponent *ecomp)
 {
-#ifdef HAVE_LIBECAL_2_0
-    ICalComponent *icomp = e_cal_component_get_icalcomponent(ecomp);
-#else
-    icalcomponent *icomp = e_cal_component_get_icalcomponent(ecomp);
-#endif
+    CalComponent icomp(e_cal_component_get_icalcomponent(ecomp));
     if (!icomp) {
         SE_THROW("internal error in getItemID(): ECalComponent without icalcomp");
     }
@@ -1396,11 +1372,7 @@ string EvolutionCalendarSource::getItemModTime(const ItemID &id)
     if (!needChanges()) {
         return "";
     }
-#ifdef HAVE_LIBECAL_2_0
-    eptr<ICalComponent> icomp(retrieveItem(id));
-#else
-    eptr<icalcomponent> icomp(retrieveItem(id));
-#endif
+    eptr<CalComponent::T> icomp(retrieveItem(id));
     return getItemModTime(icomp);
 }
 
