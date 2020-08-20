@@ -1,4 +1,4 @@
-#!@PYTHON@
+#!/usr/bin/python3
 
 """
 Converts the .log output for a client-test test into HTML, with
