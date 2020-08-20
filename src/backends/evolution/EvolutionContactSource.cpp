@@ -1017,11 +1017,11 @@ EvolutionContactSource::insertItem(const string &uid, const std::string &item, b
         case SYNCHRONOUS:
             if (uid.empty()) {
                 gchar* newuid;
-                if (!e_book_client_add_contact_sync(m_addressbook, contact, &newuid,
+                if (!e_book_client_add_contact_sync(m_addressbook, contact,
 #ifdef HAVE_E_BOOK_OPERATION_FLAGS
                                                     E_BOOK_OPERATION_FLAG_NONE,
 #endif
-                                                    nullptr, gerror)) {
+                                                    &newuid, nullptr, gerror)) {
                     throwError(SE_HERE, "add new contact", gerror);
                 }
                 PlainGStr newuidPtr(newuid);

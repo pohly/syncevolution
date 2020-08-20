@@ -208,7 +208,10 @@ void EvolutionCalendarSource::open()
     // a reasonably cheap operation (so no harm there).
     for (int retries = 0; retries < 2; retries++) {
         auto create = [type=sourceType()] (ESource *source, GError **gerror) {
-            return E_CLIENT(e_cal_client_connect_sync(source, type, gerror));
+            return E_CLIENT(e_cal_client_connect_sync(source, type,
+                                                      -1, // timeout in seconds
+                                                      nullptr, // cancellable
+                                                      gerror));
         };
         m_calendar.reset(E_CAL_CLIENT(openESource(sourceExtension(),
                                                   m_type == EVOLUTION_CAL_SOURCE_TYPE_EVENTS ? e_source_registry_ref_builtin_calendar :
@@ -885,7 +888,10 @@ EvolutionCalendarSource::InsertItemResult EvolutionCalendarSource::insertItem(co
         modTime = getItemModTime(newid);
     }
 
-    g_clear_object (&subcomp);
+#ifdef HAVE_LIBECAL_2_0
+    // TODO: this object leaks when an exception is thrown. Store in smart pointer.
+    g_clear_object(&subcomp);
+#endif
 
     return InsertItemResult(newluid, modTime, state);
 }
