@@ -234,6 +234,7 @@ void ObexTransportAgent::connectReq() {
     OBEX_ObjectAddHeader(m_handle, connect, OBEX_HDR_TARGET, header, strlen ((char *) header.bs), OBEX_FL_FIT_ONE_PACKET);
     m_obexReady = false;
     m_requestStart = time (nullptr);
+    SE_LOG_DEV(NULL, "ObexTransportAgent: OBEX_Request for OBEX_CMD_CONNECT");
     if (OBEX_Request (m_handle, connect) <0) {
         SE_THROW_EXCEPTION (TransportException, "ObexTransport: OBEX connect init failed");
     }
@@ -276,7 +277,7 @@ void ObexTransportAgent::shutdown() {
             //add header "connection id"
             obex_headerdata_t header;
             header.bq4 = m_connectId;
-            SE_LOG_DEV(NULL, "ObexTransportAgent::shutdown: send OBEX_CMD_DISCONNECT");
+            SE_LOG_DEV(NULL, "ObexTransportAgent::shutdown: OBEX_Request for OBEX_CMD_DISCONNECT");
             OBEX_ObjectAddHeader (m_handle, disconnect, OBEX_HDR_CONNECTION, header, sizeof
                                   (m_connectId), OBEX_FL_FIT_ONE_PACKET);
             if (OBEX_Request (m_handle, disconnect) <0) {
@@ -322,6 +323,7 @@ void ObexTransportAgent::send(const char *data, size_t len) {
     m_status = ACTIVE;
     m_requestStart = time (nullptr);
     m_obexReady = false;
+    SE_LOG_DEV(NULL, "ObexTransportAgent: OBEX_Request for OBEX_CMD_PUT");
     if (OBEX_Request (m_handle, put) < 0) {
         SE_THROW_EXCEPTION (TransportException, "ObexTransport: send failed");
     }
@@ -408,6 +410,7 @@ TransportAgent::Status ObexTransportAgent::wait(bool noReply) {
 
         //send the request
         m_obexReady = false;
+        SE_LOG_DEV(NULL, "ObexTransportAgent: OBEX_Request for OBEX_CMD_GET");
         if (OBEX_Request (m_handle, get) < 0) {
             SE_THROW_EXCEPTION (TransportException, "ObexTransport: get failed");
         }
@@ -625,6 +628,7 @@ gboolean ObexTransportAgent::obex_fd_source_cb_impl (GIOChannel *io, GIOConditio
             return TRUE;
         }
 
+        SE_LOG_DEV(NULL, "ObexTransportAgent: OBEX_HandleInput");
         if (OBEX_HandleInput (m_handle, OBEX_POLL_INTERVAL) <0 && errno != EINTR) {
             //transport error
             //no way to recovery, simply abort
