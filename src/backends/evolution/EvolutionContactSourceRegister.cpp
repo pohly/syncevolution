@@ -29,7 +29,9 @@ static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
     SourceType sourceType = SyncSource::getSourceType(params.m_nodes);
     bool isMe = sourceType.m_backend == "Evolution Address Book";
     bool maybeMe = sourceType.m_backend == "addressbook";
+#ifdef ENABLE_EBOOK
     const bool enabled = true;
+#endif
 
     EDSAbiWrapperInit();
 

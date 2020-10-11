@@ -31,7 +31,9 @@ static std::unique_ptr<SyncSource> createSource(const SyncSourceParams &params)
 {
     SourceType sourceType = SyncSource::getSourceType(params.m_nodes);
     bool isMe;
+#ifdef ENABLE_ECAL
     const bool enabled = true;
+#endif
 
     EDSAbiWrapperInit();
 
