@@ -30,6 +30,7 @@
 #include <syncevo/Exception.h>
 #include <syncevo/Logging.h>
 
+#include <kstandarddirs.h>
 #include <libkcal/icalformat.h>
 //#include <libkcal/vcalformat.h>
 #include <libkcal/calendarlocal.h>
@@ -60,12 +61,17 @@ TDEPIMCalendarSource::TDEPIMCalendarSource( TDEPIMCalendarSourceType type, const
 			Exception::throwError(SE_HERE, "internal init error, invalid calendar type");
 		break;
 	}
- //NOTE not really used
+
+	//NOTE not really used
 	m_contentMimeType = "text/calendar";
 
 	app = new TDEPIMSyncSource("syncevo-tdepim-cal");
 
-	calendarResPtr = new KCal::CalendarResources( "UTC" );
+	TDEConfig config( locate( "config", "korganizerrc" ) );
+	config.setGroup( "Time & Date" );
+	TQString tz = config.readEntry( "TimeZoneId", "UTC" );
+
+	calendarResPtr = new KCal::CalendarResources( tz );
 	if (!calendarResPtr) {
 		Exception::throwError(SE_HERE, "internal error, can not open the default calendar");
 	}
@@ -82,7 +88,7 @@ TDEPIMCalendarSource::~TDEPIMCalendarSource() {
 	delete app;
 }
 
-TQString TDEPIMCalendarSource::lastModifiedNormalized(const KCal::Incidence *e)
+TQString TDEPIMCalendarSource::lastModified(const KCal::Incidence *e)
 {
 	TQDateTime d = e->lastModified();
 	// if no modification date is available, always return the same 0-time stamp
@@ -92,7 +98,7 @@ TQString TDEPIMCalendarSource::lastModifiedNormalized(const KCal::Incidence *e)
 		d.setTime_t(0);
 
 	// We pass UTC, because we open the calendar in UTC
-// 	return d.toString(TQt::ISODate); 
+// 	return d.toString(TQt::ISODate);
 	return d.toString("yyyyMMddThhmmssZ");
 }
 
@@ -115,8 +121,8 @@ TDEPIMCalendarSource::Databases TDEPIMCalendarSource::getDatabases()
 
 		result.push_back (
 			Database ( 
-				static_cast<const char*>(( *i )->resourceName().utf8()),		// the name of the resource
-				static_cast<const char*>(( *i )->identifier().utf8()),		// the path - (we use the resource uid)
+				( *i )->resourceName().utf8().data(),		// the name of the resource
+				( *i )->identifier().utf8().data(),		// the path - (we use the resource uid)
 				first,			// default or not
 				( *i )->readOnly()	// read only or not
 			)
@@ -138,7 +144,7 @@ void TDEPIMCalendarSource::open()
 	 * what will be visible for sync 
 	 */
 	for (KRES::Manager<KCal::ResourceCalendar>::ActiveIterator i = mgr->activeBegin(); i != mgr->activeEnd(); i++) {
-		if ( static_cast<const char*>(( *i )->identifier().utf8()) == id ) {
+		if ( ( *i )->identifier().utf8().data() == id ) {
 // 			SE_LOG_DEBUG(getDisplayName(), "Resource id: %s found", path_str.c_str() );
 			calendarPtr = ( *i ) ;
 			break;
@@ -194,31 +200,31 @@ void TDEPIMCalendarSource::listAllItems(SyncSourceRevisions::RevisionMap_t &revi
 	  case TDEPIM_TASKS:
 		e = calendarPtr->rawEvents( KCal::EventSortUnsorted , KCal::SortDirectionAscending );
 		for (KCal::Event::List::ConstIterator i = e.begin(); i != e.end(); i++) {
-			lm = lastModifiedNormalized((*i));
-			revisions[static_cast<const char*>((*i)->uid().utf8())] = static_cast<const char*>(lm.utf8());
-        		SE_LOG_DEBUG(getDisplayName(), "Event UID: %s last changed( %s )", 
-        			static_cast<const char*>((*i)->uid().utf8()), 
-        			static_cast<const char*>(lm.utf8()));
+			lm = lastModified((*i));
+			revisions[(*i)->uid().utf8().data()] = lm.utf8().data();
+        		SE_LOG_DEBUG(getDisplayName(), "Event UID: %s modified( %s )",
+        			(*i)->uid().utf8().data(),
+        			lm.utf8().data());
 		}
 		break;
 	  case TDEPIM_TODO:
 		t = calendarPtr->rawTodos( KCal::TodoSortUnsorted , KCal::SortDirectionAscending );
 		for (KCal::Todo::List::ConstIterator i = t.begin(); i != t.end(); i++) {
-			lm = lastModifiedNormalized((*i));
-			revisions[static_cast<const char*>((*i)->uid().utf8())] = static_cast<const char*>(lm.utf8());
-        		SE_LOG_DEBUG(getDisplayName(), "Todos UID: %s last changed( %s )", 
-        			static_cast<const char*>((*i)->uid().utf8()), 
-        			static_cast<const char*>(lm.utf8()));
+			lm = lastModified((*i));
+			revisions[(*i)->uid().utf8().data()] = lm.utf8().data();
+        		SE_LOG_DEBUG(getDisplayName(), "Todos UID: %s modified( %s )",
+        			(*i)->uid().utf8().data(),
+        			lm.utf8().data());
 		}
 		break;
 	  case TDEPIM_JOURNAL:
 		j = calendarPtr->rawJournals( KCal::JournalSortUnsorted , KCal::SortDirectionAscending );
 		for (KCal::Journal::List::ConstIterator i = j.begin(); i != j.end(); i++) {
-			lm = lastModifiedNormalized((*i));
-			revisions[static_cast<const char*>((*i)->uid().utf8())] = static_cast<const char*>(lm.utf8());
-        		SE_LOG_DEBUG(getDisplayName(), "Journal UID: %s last changed( %s )", 
-        			static_cast<const char*>((*i)->uid().utf8()), 
-        			static_cast<const char*>(lm.utf8()));
+			lm = lastModified((*i));
+			revisions[(*i)->uid().utf8().data()] = lm.utf8().data();
+        		SE_LOG_DEBUG(getDisplayName(), "Journal UID: %s modified( %s )",
+        			(*i)->uid().utf8().data(),
+        			lm.utf8().data());
 		}
 		break;
 	  default:
@@ -238,6 +244,8 @@ TrackingSyncSource::InsertItemResult TDEPIMCalendarSource::insertItem(const std:
 	TQString uid  = TQString::fromUtf8(luid.data(), luid.size());
 	TQString data = TQString::fromUtf8(item.data(), item.size());
 
+	SE_LOG_DEBUG(getDisplayName(), "Item to save: ( %s )", data.latin1() );
+
 	/*
 	* Check if item already exists. If yes notify the engine and do nothing here
 	*/
@@ -250,46 +258,42 @@ TrackingSyncSource::InsertItemResult TDEPIMCalendarSource::insertItem(const std:
 // 				Exception::throwError(SE_HERE, "internal error, unable to save calendar");
 		SE_LOG_DEBUG(getDisplayName(), "Item deleted for merge: ( %s )", uid.latin1() );
 		replaced = true;
-// FIXME ufortunately the ITEM_NEEDS_MERGE does not work well with updated items
+// FIXME unfortunately the ITEM_NEEDS_MERGE does not work well with updated items
 // 		std::string ret_uid(uid.utf8(), uid.utf8().length());
 // 		return InsertItemResult(ret_uid, "", ITEM_NEEDS_MERGE);
 	}
 
 	/*
-	 * Add to local calendar, so that we may set the uid
+	 * Create incidence and set the uid to the old one if replaced
 	 */
-	KCal::CalendarLocal cal(TQString::fromLatin1( "UTC" ));
-	if (! format.fromString(&cal,data) )
-		Exception::throwError(SE_HERE, "internal error, unable to convert calendar data");
+	KCal::Incidence *e = format.fromString(data);
 
-	/*
-	 * Add the events from the temporary calendar
-	 * We iterate over the list, but it should have only one event.
-	 */
-	KCal::Incidence::List itemList = cal.incidences();
-	for (KCal::Incidence::List::ConstIterator i = itemList.begin(); i != itemList.end(); i++) {
-		KCal::Incidence *e = (*i)->clone();
-		if ( replaced )
-			e->setUid( uid );
-		else
-			uid = e->uid();
-		if ( ! calendarPtr->addIncidence(e))
-			Exception::throwError(SE_HERE, "internal error, unable to add item to calendar");
-		if ( ! calendarPtr->save(e) )
-			Exception::throwError(SE_HERE, "internal error, unable to save item to calendar");
-		SE_LOG_DEBUG(getDisplayName(), "Item saved: ( %s )", uid.latin1() );
-	}
+	if (e==0)
+	    Exception::throwError(SE_HERE, "internal error, unable to convert calendar data");
+
+    if ( replaced )
+        e->setUid( uid );
+    else
+        uid = e->uid();
+
+    if ( ! calendarPtr->addIncidence(e))
+        Exception::throwError(SE_HERE, "internal error, unable to add item to calendar");
+
+    if ( ! calendarPtr->save(e) )
+        Exception::throwError(SE_HERE, "internal error, unable to save item to calendar");
+    SE_LOG_DEBUG(getDisplayName(), "Item saved: ( %s )", uid.latin1() );
+
 	calendarResPtr->setModified(true);
 
 	KCal::Incidence *newinc = calendarPtr->incidence(uid);
 	if ( ! newinc )
 		Exception::throwError(SE_HERE, "internal error, unable to get item from calendar");
 
-	TQString lm=lastModifiedNormalized(newinc);
+	TQString lm=lastModified(newinc);
 	SE_LOG_DEBUG(getDisplayName(), "Item ( %s : %s ) done.", 
-		static_cast<const char*>(newinc->uid().utf8()), 
-		static_cast<const char*>(lm.utf8() ));
-   return InsertItemResult(static_cast<const char*>(newinc->uid().utf8()), static_cast<const char*>(lm.utf8()), state);
+		newinc->uid().utf8().data(),
+		lm.utf8().data());
+   return InsertItemResult(newinc->uid().utf8().data(), lm.utf8().data(), state);
 }
 
 void TDEPIMCalendarSource::readItem(const std::string &luid, std::string &item, bool raw)
@@ -297,13 +301,11 @@ void TDEPIMCalendarSource::readItem(const std::string &luid, std::string &item, 
 	KCal::ICalFormat iCalFmt;
 //	NOTE: The libkcal vCal (v.1.0) does not work pretty well - the support is disabled for now
 //	KCal::VCalFormat vCalFmt;
-//	TQString data = "";
 
 	TQString uid = TQString::fromUtf8(luid.data(),luid.size());
 	
 	/* Build a local calendar for the incidence data */
-	KCal::CalendarLocal cal(TQString::fromLatin1( "UTC" ) /*calendarResPtr->timeZoneId()*/);
-
+	KCal::CalendarLocal cal( calendarResPtr->timeZoneId() );
 	switch (m_type) {
 	  case TDEPIM_TASKS:
 		cal.addIncidence(calendarPtr->event(uid)->clone());
@@ -319,12 +321,11 @@ void TDEPIMCalendarSource::readItem(const std::string &luid, std::string &item, 
 	  break;
 	}
 
-	// Convert the data to icalendar 
+	// Convert the data to string
 	TQString data = iCalFmt.toString( &cal );
-
-	item.assign(static_cast<const char*>(data.utf8()));
+	item.assign(data.utf8().data());
 	SE_LOG_DEBUG(getDisplayName(), "Item id ( %s )", luid.c_str() );
-// 	SE_LOG_DEBUG(getDisplayName(), "TDE calendar Data: %s\n", data_str.c_str() );
+// 	SE_LOG_DEBUG(getDisplayName(), "TDE calendar Data: %s\n", data.utf8().data() );
 }
 
 
@@ -348,7 +349,7 @@ std::string TDEPIMCalendarSource::getDescription(const std::string &luid)
 {
 	KCal::Incidence *inc = calendarPtr->incidence(TQString::fromUtf8(luid.data(),luid.size()));
 	if ( inc )
-		return static_cast<const char*>(inc->summary().utf8());
+		return inc->summary().utf8().data();
         SE_LOG_DEBUG(getDisplayName(), "Resource id(%s) not found", luid.c_str() );
 	return "";
 }

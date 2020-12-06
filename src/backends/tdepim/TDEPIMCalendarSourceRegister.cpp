@@ -39,7 +39,6 @@ static std::unique_ptr<SyncSource> createSource ( const SyncSourceParams &params
 * NOTE: The libkcal vCal (v.1.0) does not work pretty well I had to leave
 *       support only for iCal
 */
-
 	SourceType sourceType = SyncSource::getSourceType(params.m_nodes);
 
 // 	SE_LOG_DEBUG("createSource() c1", "Requested Source format %s", sourceType.m_format.c_str());
@@ -134,14 +133,10 @@ class TDECalendarTest : public CppUnit::TestFixture {
     CPPUNIT_TEST_SUITE(TDECalendarTest);
     CPPUNIT_TEST(testInstantiate);
 
-    // There is no default database in Akonadi:
     // CPPUNIT_TEST(testOpenDefaultCalendar);
     // CPPUNIT_TEST(testOpenDefaultTodo);
     // CPPUNIT_TEST(testOpenDefaultMemo);
 
-    // Besides, don't enable tests which depend on running Akonadi,
-    // because that would cause "client-test SyncEvolution" unless
-    // Akonadi was started first:
     // CPPUNIT_TEST(testTimezones);
 
     CPPUNIT_TEST_SUITE_END();

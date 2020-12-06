@@ -50,7 +50,20 @@ src_backends_tdepim_cppflags = \
    $(BACKEND_CPPFLAGS) \
    -I$(top_srcdir)/src/backends/tdepim
 
-#src_backends_tdepim_src = $(src_backends_tdepim_synctdepimcal_src) $(src_backends_tdepim_synctdepimabc_src)
+src/backends/tdepim/KNotesIface.kidl:
+	cp /opt/trinity/include/KNotesIface.h src/backends/tdepim/KNotesIface.h
+	cd src/backends/tdepim/ && $(DCOPIDL) KNotesIface.h > KNotesIface.kidl
+
+src/backends/tdepim/KNotesIface_stub.h: src/backends/tdepim/KNotesIface.kidl
+	cd src/backends/tdepim/ && $(DCOPIDL2CPP) KNotesIface.kidl
+
+src/backends/tdepim/KNotesIface_stub.cpp: src/backends/tdepim/KNotesIface_stub.h
+
+CLEANFILES += src/backends/tdepim/KNotesIface_stub.h \
+   src/backends/tdepim/KNotesIface_stub.cpp \
+   src/backends/tdepim/KNotesIface.kidl \
+   src/backends/tdepim/KNotesIface_skel.cpp \
+   src/backends/tdepim/KNotesIface.h
 
 src_backends_tdepim_synctdepimcal_la_SOURCES = $(src_backends_tdepim_synctdepimcal_src)
 src_backends_tdepim_synctdepimcal_la_LIBADD = $(TDEPIMCAL_LIBS) $(SYNCEVOLUTION_LIBS)

@@ -85,7 +85,7 @@ TDEPIMAddressBookSource::~TDEPIMAddressBookSource()
 	delete app;
 }
 
-TQString TDEPIMAddressBookSource::lastModifiedNormalized(TDEABC::Addressee &e)
+TQString TDEPIMAddressBookSource::lastModified(TDEABC::Addressee &e)
 {
 	//Get the revision date of the KDE addressbook entry.
 	TQDateTime d = e.revision();
@@ -97,7 +97,7 @@ TQString TDEPIMAddressBookSource::lastModifiedNormalized(TDEABC::Addressee &e)
 		e.setRevision(d);
 	}
 
-// We pass UTC, because we open the calendar in UTC
+// We pass UTC, because we open the source in UTC
 // 	return d.toString(TQt::ISODate); 
 	return d.toString("yyyyMMddThhmmssZ");
 }
@@ -126,18 +126,18 @@ TDEPIMAddressBookSource::Databases TDEPIMAddressBookSource::getDatabases()
 		++it;
 
 		SE_LOG_DEBUG(getDisplayName(), "SUB Name  : %s , ID: %s", 
-			static_cast<const char*>(res->resourceName().utf8()), 
-			static_cast<const char*>(res->identifier().utf8()) );
+			res->resourceName().utf8().data(),
+			res->identifier().utf8().data() );
 	/*
 	 * we pull only active resources thus user has freedom to decide what wants to be visible for sync
 	 */
 		if ( res->isActive() ) {
 			result.push_back (
 				Database ( 
-					static_cast<const char*>(res->resourceName().utf8()), // the name of the resource
-					static_cast<const char*>(res->identifier().utf8()),   // the path - (we use the resource uid)
-					first,			// default or not
-					res->readOnly()		// read only or not
+					res->resourceName().utf8().data(),  // the name of the resource
+					res->identifier().utf8().data(),    // the path - (we use the resource uid)
+					first,                              // default or not
+					res->readOnly()                     // read only or not
 				)
 			);
 			first = false;
@@ -156,11 +156,11 @@ void TDEPIMAddressBookSource::open()
 	TDEABC::Resource *res;
 	while ( (res = it.current()) != 0 ) {
 		++it;
-		if ( id.compare(static_cast<const char*>(res->identifier().utf8())) == 0 ) {
+		if ( id.compare(res->identifier().utf8().data()) == 0 ) {
 			if ( ! res->isActive() )
 				Exception::throwError(SE_HERE, "internal error, configured resource is not active");
 			ticketPtr = res->requestSaveTicket();
-			SE_LOG_DEBUG(getDisplayName(), "TDE address book id: %s ", static_cast<const char*>(res->identifier().utf8()) );
+			SE_LOG_DEBUG(getDisplayName(), "TDE address book id: %s ", res->identifier().utf8().data() );
 			break;
 		}
 	}
@@ -197,13 +197,12 @@ void TDEPIMAddressBookSource::listAllItems(RevisionMap_t &revisions)
 
 	for (TDEABC::Resource::Iterator it=workbookPtr->begin(); it!=workbookPtr->end(); it++) {
 		TDEABC::Addressee ab = (*it);
-		TQString lm = lastModifiedNormalized(ab);
-		revisions[static_cast<const char*>(ab.uid().utf8())] = static_cast<const char*>(lm.utf8());
+		TQString lm = lastModified(ab);
+		revisions[ab.uid().utf8().data()] = lm.utf8().data();
 // 		m_categories.append(a.categories()); // Set filter categories
-		SE_LOG_DEBUG(getDisplayName(), "Addressee UID: %s last changed(%s)",
-			static_cast<const char*>(ab.uid().utf8()),
-			static_cast<const char*>(lm.utf8())
-		);
+		SE_LOG_DEBUG(getDisplayName(), "Addressee UID: %s modified(%s)",
+			ab.uid().utf8().data(),
+			lm.utf8().data());
 	}
 }
 
@@ -260,12 +259,12 @@ TrackingSyncSource::InsertItemResult TDEPIMAddressBookSource::insertItem(const s
 	// read out the new addressee to get the new revision
 	TDEABC::Addressee addresseeNew = workbookPtr->findByUid(uidOld);
 
-	TQString revision = lastModifiedNormalized(addresseeNew);
+	TQString revision = lastModified(addresseeNew);
 
 	SE_LOG_DEBUG(getDisplayName(), "TDE addressbook UID= %s ADD/UPDATE (REV=%s) OK",
-		static_cast<const char*>(uidOld.utf8()),
-		static_cast<const char*>(revision.utf8()) );
-	return InsertItemResult(static_cast<const char*>(uidOld.utf8()), static_cast<const char*>(revision.utf8()), state);
+		uidOld.utf8().data(),
+		revision.utf8().data() );
+	return InsertItemResult(uidOld.utf8().data(), revision.utf8().data(), state);
 }
 
 void TDEPIMAddressBookSource::readItem(const std::string &luid, std::string &item, bool raw)
@@ -289,10 +288,10 @@ void TDEPIMAddressBookSource::readItem(const std::string &luid, std::string &ite
 	else
 		data = converter.createVCard(addressee, TDEABC::VCardConverter::v3_0);
 
-	item.assign(static_cast<const char*>(data.utf8()));
+	item.assign(data.utf8().data());
 /* DEBUG
  	SE_LOG_DEBUG(getDisplayName(), "Item id ( %s )", luid.c_str() );
- 	SE_LOG_DEBUG(getDisplayName(), "data %s", static_cast<const char*>(data.utf8()));
+ 	SE_LOG_DEBUG(getDisplayName(), "data %s", data.utf8().data();
 */
 }
 
@@ -341,8 +340,8 @@ std::string TDEPIMAddressBookSource::getDescription(const string &luid)
 	}
 	desc.append("\n");
 
-	SE_LOG_DEBUG(getDisplayName(), "User summary %s", static_cast<const char*>(desc.utf8()));
-	return static_cast<const char*>(desc.utf8());
+	SE_LOG_DEBUG(getDisplayName(), "User summary %s", desc.utf8().data());
+	return desc.utf8().data();
 }
 
 void TDEPIMAddressBookSource::getSynthesisInfo(SynthesisInfo &info,

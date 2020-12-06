@@ -92,7 +92,7 @@ private:
 	* This functions is used internally to normalize the revision field 
 	* If no revision is available, always return the same 0-time stamp
 	*/
-	TQString lastModifiedNormalized(const KCal::Incidence *e);
+	TQString lastModified(const KCal::Incidence *e);
 
 	/* All calendar storages must suppport UID/RECURRENCE-ID,
 	 * it's part of the API. Therefore we can rely on it.

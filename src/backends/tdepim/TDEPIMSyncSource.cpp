@@ -65,12 +65,6 @@ TDEPIMSyncSource::TDEPIMSyncSource(TQString name) :
 
 TDEPIMSyncSource::~TDEPIMSyncSource()
 {
-	if ( newApp ) {
-		delete tdeappPtr;
-		tdeappPtr = 0;
-	}
-// 	SE_LOG_DEBUG(NULL, "TDE base destroyed OK");
 }
-
 
 SE_END_CXX

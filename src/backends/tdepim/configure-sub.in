@@ -7,7 +7,12 @@ TDEPIMABCFOUND=no
 TDEPIMDCOPFOUND=no
 TDEPIMNOTESFOUND=no
 
-AC_CHECK_PROGS([TQMAKE], [tqmake tqmake])
+AC_CHECK_PROGS([TQMAKE], [tqmake])
+# dcopidl is required to generate the stubs
+AC_CHECK_PROGS([DCOPIDL], [dcopidl], [/opt/trinity/bin/dcopidl])
+AC_CHECK_PROGS([DCOPIDL2CPP], [dcopidl2cpp], [/opt/trinity/bin/dcopidl2cpp])
+#AC_CHECK_FILE([KNotesIface.h], [action-if-found], [action-if-not-found], [includes])
+
 PKG_CHECK_MODULES(TQT, tqt, TQTFOUND=yes, [TQTFOUND=no])
 
 # Check for TDEPIM. There is no .pc file for it,
@@ -83,6 +88,7 @@ if test $enable_tdepimcal = yes ; then
         test $TDEPIMCALFOUND = yes ||  AC_MSG_ERROR([--enable-tdepimcal requires packages libtdepim1-trinity-dev, 
           tdelibs14-trinity-dev, but they were not found])
         AC_DEFINE(ENABLE_TDEPIMCAL, 1, [TDE PIM Calendar available])
+        AC_DEFINE(ENABLE_TDEPIM, 1, [TDE PIM enabled])
 else
         # avoid unneeded dependencies on TDEPIM
         TDEPIMCAL_CFLAGS=
@@ -93,6 +99,7 @@ if test $enable_tdepimabc = yes ; then
         test $TDEPIMABCFOUND = yes ||  AC_MSG_ERROR([--enable-tdepimabc requires packages libtdepim1-trinity-dev, 
           tdelibs14-trinity-dev, but they were not found])
         AC_DEFINE(ENABLE_TDEPIMABC, 1, [TDE PIM Address Book available])
+        AC_DEFINE(ENABLE_TDEPIM, 1, [TDE PIM enabled])
 else
         # avoid unneeded dependencies on TDEPIM
         TDEPIMABC_CFLAGS=
@@ -103,6 +110,7 @@ if test $enable_tdepimnotes = yes ; then
         test $TDEPIMNOTESFOUND = yes ||  AC_MSG_ERROR([--enable-tdepimnotes requires packages tdelibs14-trinity-dev, 
           tdepim-trinity-dev, but they were not found])
         AC_DEFINE(ENABLE_TDEPIMNOTES, 1, [TDE PIM Address Book available])
+        AC_DEFINE(ENABLE_TDEPIM, 1, [TDE PIM enabled])
 else
         # avoid unneeded dependencies on TDEPIM
         TDEPIMNOTES_CFLAGS=

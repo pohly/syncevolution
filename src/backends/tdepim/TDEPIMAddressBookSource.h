@@ -108,7 +108,7 @@ private:
 	* the specific entry.
 	* If no revision is available, always return the same 0-time stamp
 	*/
-	TQString lastModifiedNormalized(TDEABC::Addressee &e);
+	TQString lastModified(TDEABC::Addressee &e);
 
 //	/** TODO if it makes sense to sync up only specific categories
 //	* return true if at least one item in the given list is included in the categories member

@@ -75,7 +75,7 @@ private:
 	*/
 	static TQString stripHtml(TQString input);
 
-    TQString lastModifiedNormalized(TQDateTime &d) const;
+    TQString lastModified(TQDateTime &d) const;
 
 	/** 
 	 * Implement some brief information extraction from the note
