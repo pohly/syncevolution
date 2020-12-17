@@ -839,6 +839,33 @@
    fun:__libc_res_nquerydomain
 }
 
+# ==21230== Conditional jump or move depends on uninitialised value(s)
+# ==21230==    at 0xB136BB1: ??? (in /usr/lib/x86_64-linux-gnu/libgnutls.so.30.25.0)
+# ==21230==    by 0xB136F3F: ??? (in /usr/lib/x86_64-linux-gnu/libgnutls.so.30.25.0)
+# ==21230==    by 0xB14625F: ??? (in /usr/lib/x86_64-linux-gnu/libgnutls.so.30.25.0)
+# ==21230==    by 0xB1466F7: ??? (in /usr/lib/x86_64-linux-gnu/libgnutls.so.30.25.0)
+# ==21230==    by 0xB17109A: ??? (in /usr/lib/x86_64-linux-gnu/libgnutls.so.30.25.0)
+# ==21230==    by 0xB17F6CD: gnutls_x509_ext_import_subject_alt_names (in /usr/lib/x86_64-linux-gnu/libgnutls.so.30.25.0)
+# ==21230==    by 0xB174649: gnutls_x509_crt_import (in /usr/lib/x86_64-linux-gnu/libgnutls.so.30.25.0)
+# ==21230==    by 0xB174AD3: gnutls_x509_crt_list_import (in /usr/lib/x86_64-linux-gnu/libgnutls.so.30.25.0)
+# ==21230==    by 0xB174D9F: gnutls_x509_crt_list_import2 (in /usr/lib/x86_64-linux-gnu/libgnutls.so.30.25.0)
+# ==21230==    by 0xB17E309: gnutls_x509_trust_list_add_trust_mem (in /usr/lib/x86_64-linux-gnu/libgnutls.so.30.25.0)
+# ==21230==    by 0xB17E7C1: gnutls_x509_trust_list_add_trust_file (in /usr/lib/x86_64-linux-gnu/libgnutls.so.30.25.0)
+# ==21230==    by 0x14AE5119: ??? (in /usr/lib/x86_64-linux-gnu/gio/modules/libgiognutls.so)
+# ==21230== 
+{
+   gnutls gnutls_x509_trust_list_add_trust_file
+   Memcheck:Cond
+   obj:/usr/lib/x86_64-linux-gnu/libgnutls.so.30.25.0
+   ...
+   fun:gnutls_x509_ext_import_subject_alt_names
+   fun:gnutls_x509_crt_import
+   fun:gnutls_x509_crt_list_import
+   fun:gnutls_x509_crt_list_import2
+   fun:gnutls_x509_trust_list_add_trust_mem
+   fun:gnutls_x509_trust_list_add_trust_file
+}
+
 # ==25419== 21 bytes in 1 blocks are definitely lost in loss record 157 of 649
 # ==25419==    at 0x4C27673: malloc (vg_replace_malloc.c:263)
 # ==25419==    by 0xA182881: strdup (strdup.c:43)
