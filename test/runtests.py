@@ -395,8 +395,9 @@ class Context:
 
         if not runAsIs:
             cmdstr = " ".join([(' ' in x or '(' in x or '\\' in x or x == '') and ("'" in x and '"%s"' or "'%s'") % x or x for x in cmd])
-        if dumpCommands:
-            cmdstr = "set -x; " + cmdstr
+        # if dumpCommands:
+        #   Doesn't work, we need a single command.
+        #   cmdstr = "set -x; " + cmdstr
 
         cwd = os.getcwd()
         # Most commands involving schroot need to run with paths as seen inside the chroot.
