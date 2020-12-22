@@ -856,7 +856,6 @@
 {
    gnutls gnutls_x509_trust_list_add_trust_file
    Memcheck:Cond
-   obj:/usr/lib/x86_64-linux-gnu/libgnutls.so.30.25.0
    ...
    fun:gnutls_x509_ext_import_subject_alt_names
    fun:gnutls_x509_crt_import
