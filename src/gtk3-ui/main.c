@@ -60,120 +60,43 @@ init (int argc, char *argv[])
     }
 }
 
-
-#ifdef ENABLE_UNIQUE
-#include <unique/unique.h>
-
-enum
+static void
+activate (GtkApplication *app)
 {
-    COMMAND_0, 
+    GList *list;
+    GtkWindow *window;
 
-    COMMAND_SHOW_CONFIGURATION
-    /* no sync-ui specific commands */
-};
+    list = gtk_application_get_windows (app);
 
-static UniqueResponse
-message_received_cb (UniqueApp         *app,
-                     gint               command,
-                     UniqueMessageData *message,
-                     guint              time_,
-                     app_data          *data)
-{
-    char *arg;
-    GtkWindow *main_win;
-
-    main_win = sync_ui_get_main_window (data);
-    switch (command) {
-    case UNIQUE_ACTIVATE:
-        if (GTK_IS_WINDOW (main_win)) {
-            /* move the main window to the screen that sent us the command */
-            gtk_window_set_screen (GTK_WINDOW (main_win), 
-                                   unique_message_data_get_screen (message));
-            gtk_window_present (GTK_WINDOW (main_win));
-        }
-        break;
-    case COMMAND_SHOW_CONFIGURATION:
-        arg = unique_message_data_get_text (message);
-        if (GTK_IS_WINDOW (main_win) && arg) {
-            /* move the main window to the screen that sent us the command */
-            gtk_window_set_screen (GTK_WINDOW (main_win), 
-                                   unique_message_data_get_screen (message));
-            sync_ui_show_settings (data, arg);
-        }
-        break;
-    default:
-        break;
-    }
-
-    return UNIQUE_RESPONSE_OK;
-}
-
-int
-main (int argc, char *argv[])
-{
-    UniqueApp *app;
-
-    init (argc, argv);
-
-    app = unique_app_new_with_commands ("org.Moblin.Sync", NULL,
-                                        "show-configuration", COMMAND_SHOW_CONFIGURATION,
-                                        NULL);
-
-    if (unique_app_is_running (app)) {
-        UniqueMessageData *message = NULL;
-        UniqueCommand command = UNIQUE_ACTIVATE;
+    if (list) {
+        gtk_window_present (GTK_WINDOW (list->data));
+    } else {
+        app_data *data = sync_ui_create ();
+        window = sync_ui_get_main_window (data);
+        gtk_window_set_application (window, app);
+        gtk_widget_show (GTK_WIDGET (window));
 
         if (settings_id) {
-            command = COMMAND_SHOW_CONFIGURATION;
-            message = unique_message_data_new ();
-            unique_message_data_set_text (message, settings_id, -1);
-        }
-        unique_app_send_message (app, command, message);
-        unique_message_data_free (message);
-    } else {
-        app_data *data;
-
-        set_app_name_and_icon ();
-
-        data = sync_ui_create ();
-        if (data) {
-            /* UniqueApp watches the main window so it can terminate 
-             * the startup notification sequence for us */
-            unique_app_watch_window (app, sync_ui_get_main_window (data));
-
-            /* handle notifications from new app launches */     
-            g_signal_connect (app, "message-received", 
-                              G_CALLBACK (message_received_cb), data);
-            if (settings_id) {
-                sync_ui_show_settings (data, settings_id);
-            }
-            gtk_main ();
+            sync_ui_show_settings (data, settings_id);
         }
     }
-
-    g_object_unref (app);
-    return 0;
 }
-
-#else
 
 int
 main (int argc, char *argv[])
 {
-    app_data *data;
+    GtkApplication *app;
+    gint status;
 
     init (argc, argv);
-
     set_app_name_and_icon ();
-    data = sync_ui_create ();
 
-    if (settings_id) {
-        sync_ui_show_settings (data, settings_id);
-    }
+    app = gtk_application_new ("org.Moblin.Sync", 0);
+    g_signal_connect (app, "activate", G_CALLBACK (activate), NULL);
 
-    gtk_main ();
-    return 0;
+    status = g_application_run (G_APPLICATION (app), argc, argv);
+
+    g_object_unref (app);
+
+    return status;
 }
-
-#endif /* ENABLE_UNIQUE */
-
