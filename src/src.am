@@ -88,10 +88,16 @@ else
 CORE_SOURCES += $(BACKEND_REGISTRIES)
 endif
 
-CORE_CXXFLAGS = $(SYNTHESIS_CFLAGS) $(CPPUNIT_CFLAGS)
+CORE_CXXFLAGS = $(SYNTHESIS_CFLAGS)
 CORE_LDADD = $(SYNCEVOLUTION_LDADD) src/syncevo/libsyncevolution.la $(GLIB_LIBS) $(GTHREAD_LIBS) $(GOBJECT_LIBS) $(LIBS)
 CORE_DEP = $(SYNCEVOLUTION_DEP) src/syncevo/libsyncevolution.la $(SYNTHESIS_DEP)
-CORE_LD_FLAGS = -Wl,-uSyncEvolution_Module_Version -Wl,--export-dynamic $(CPPUNIT_LIBS) $(ADDITIONAL_LDFLAGS)
+CORE_LD_FLAGS = -Wl,-uSyncEvolution_Module_Version -Wl,--export-dynamic $(ADDITIONAL_LDFLAGS)
+
+if ENABLE_UNIT_TESTS
+CORE_CXXFLAGS += $(CPPUNIT_CFLAGS)
+CORE_LD_FLAGS += $(CPPUNIT_LIBS)
+endif
+
 
 if ENABLE_ICALTZ_UTIL
 # Force inclusion of our own ical replacement functions directly
