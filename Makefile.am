@@ -192,7 +192,8 @@ deb rpm : checkinstall/dist/$(distdir) checkinstall/dist/debian/control
 PLATFORM_DEB_VERSION = $(VERSION_deb)
 PLATFORM_DEB_RELEASE = 1
 if ENABLE_MODULES
-deb : syncevolution-kde-deb
+# Not supported anymore.
+# deb : syncevolution-kde-deb
 deb : syncevolution-evolution-deb
 endif
 
