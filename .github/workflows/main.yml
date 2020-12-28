@@ -1,0 +1,27 @@
+name: mirror
+
+on:
+  # Mirror once per day at midnight...
+  schedule:
+    - cron: '0 0 * * *'
+
+  # ... or manually via the web interface.
+  workflow_dispatch:
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+            fetch-depth: 0
+
+      - name: fetch and push
+        run: |
+          set -x
+          cd ..
+          git clone --bare --mirror --reference syncevolution https://gitlab.freedesktop.org/SyncEvolution/syncevolution.git upstream
+          cd upstream
+          cp ../syncevolution/.git/config config
+          git push --mirror origin
