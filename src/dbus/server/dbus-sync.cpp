@@ -120,11 +120,11 @@ std::shared_ptr<TransportAgent> DBusSync::createTransportAgent()
         // away at any time, so use instance tracking.
         m_helper.m_messageSignal.connect(SessionHelper::MessageSignal_t::slot_type(&DBusTransportAgent::storeMessage,
                                                                                    agent.get(),
-                                                                                   _1,
-                                                                                   _2).track_foreign(agent));
+                                                                                   boost::placeholders::_1,
+                                                                                   boost::placeholders::_2).track_foreign(agent));
         m_helper.m_connectionStateSignal.connect(SessionHelper::ConnectionStateSignal_t::slot_type(&DBusTransportAgent::storeState,
                                                                                                    agent.get(),
-                                                                                                   _1).track_foreign(agent));
+                                                                                                   boost::placeholders::_1).track_foreign(agent));
 
         if (m_params.m_serverAlerted) {
             // A SAN message was sent to us, need to reply.

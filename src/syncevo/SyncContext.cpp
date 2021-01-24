@@ -1649,7 +1649,7 @@ static void InitializeTransport(const std::shared_ptr<TransportAgent> &agent,
     // is detected. Relies of automatic connection management
     // to disconnect when agent is deconstructed.
     SuspendFlags &flags(SuspendFlags::getSuspendFlags());
-    flags.m_stateChanged.connect(SuspendFlags::StateChanged_t::slot_type(CancelTransport, agent.get(), _1).track_foreign(agent));
+    flags.m_stateChanged.connect(SuspendFlags::StateChanged_t::slot_type(CancelTransport, agent.get(), boost::placeholders::_1).track_foreign(agent));
 }
 
 std::shared_ptr<TransportAgent> SyncContext::createTransportAgent(void *gmainloop)

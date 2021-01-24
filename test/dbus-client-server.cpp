@@ -182,7 +182,7 @@ static void callServer(const GDBusCXX::DBusConnectionPtr &conn)
     std::cout << "Got tuple: " << std::get<0>(result) << " " << std::get<1>(result) << " " << std::get<2>(result) << std::endl;
 
     std::cout << "calling server" << std::endl;
-    proxy.m_hello.start(boost::bind(helloCB, loop.get(), _1, _2), std::string("world"));
+    proxy.m_hello.start(boost::bind(helloCB, loop.get(), boost::placeholders::_1, boost::placeholders::_2), std::string("world"));
     // keep connection open until child quits
     guard.reset(new  GDBusCXX::DBusObject(conn, "foo", "bar", true));
 }
@@ -284,16 +284,16 @@ int main(int argc, char **argv)
                 forkexec->addEnvVar("DBUS_CLIENT_SERVER_KILL", opt_kill);
             }
             forkexec->m_onConnect.connect(g_strcmp0(opt_kill, "child") ?
-                                          boost::bind(onChildConnect, _1, boost::ref(testptr)) :
-                                          boost::bind(onChildConnectKill, _1, boost::ref(testptr)));
+                                          boost::bind(onChildConnect, boost::placeholders::_1, boost::ref(testptr)) :
+                                          boost::bind(onChildConnectKill, boost::placeholders::_1, boost::ref(testptr)));
             forkexec->m_onQuit.connect(onQuit);
-            forkexec->m_onFailure.connect(boost::bind(onFailure, _2));
+            forkexec->m_onFailure.connect(boost::bind(onFailure, boost::placeholders::_2));
             forkexec->start();
             g_main_loop_run(loop.get());
         } else if (opt_server) {
             boost::scoped_ptr<Test> testptr;
             std::shared_ptr<GDBusCXX::DBusServerCXX> server =
-                GDBusCXX::DBusServerCXX::listen(boost::bind(newClientConnection, _1, _2, boost::ref(testptr)),
+                GDBusCXX::DBusServerCXX::listen(boost::bind(newClientConnection, boost::placeholders::_1, boost::placeholders::_2, boost::ref(testptr)),
                                                 &dbusError);
             if (!server) {
                 dbusError.throwFailure("starting server");
@@ -307,7 +307,7 @@ int main(int argc, char **argv)
             forkexec->m_onConnect.connect(!g_strcmp0(getenv("DBUS_CLIENT_SERVER_KILL"), "child") ? calledByServer :
                                           !g_strcmp0(getenv("DBUS_CLIENT_SERVER_KILL"), "server") ? killServer :
                                           callServer);
-            forkexec->m_onFailure.connect(boost::bind(onFailure, _2));
+            forkexec->m_onFailure.connect(boost::bind(onFailure, boost::placeholders::_2));
             forkexec->connect();
             g_main_loop_run(loop.get());
         } else {

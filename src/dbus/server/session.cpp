@@ -460,10 +460,10 @@ void Session::sync2(const std::string &mode, const SessionCommon::SourceModes_t 
     if (connection) {
         connection->m_messageSignal.connect(Connection::MessageSignal_t::slot_type(&Session::storeMessage,
                                                                                    this,
-                                                                                   _1, _2).track_foreign(weak_from_this()));
+                                                                                   boost::placeholders::_1, boost::placeholders::_2).track_foreign(weak_from_this()));
         connection->m_statusSignal.connect(Connection::StatusSignal_t::slot_type(&Session::connectionState,
                                                                                  this,
-                                                                                 _1).track_foreign(weak_from_this()));
+                                                                                 boost::placeholders::_1).track_foreign(weak_from_this()));
     }
 
     // Helper implements Sync() asynchronously. If it completes

@@ -49,10 +49,10 @@ std::shared_ptr<AutoSyncManager> AutoSyncManager::createAutoSyncManager(Server &
     result->init();
 
     // update cached information about a config each time it changes
-    server.m_configChangedSignal.connect(Server::ConfigChangedSignal_t::slot_type(&AutoSyncManager::initConfig, result.get(), _1).track_foreign(result));
+    server.m_configChangedSignal.connect(Server::ConfigChangedSignal_t::slot_type(&AutoSyncManager::initConfig, result.get(), boost::placeholders::_1).track_foreign(result));
 
     // monitor running sessions
-    server.m_newSyncSessionSignal.connect(Server::NewSyncSessionSignal_t::slot_type(&AutoSyncManager::sessionStarted, result.get(), _1).track_foreign(result));
+    server.m_newSyncSessionSignal.connect(Server::NewSyncSessionSignal_t::slot_type(&AutoSyncManager::sessionStarted, result.get(), boost::placeholders::_1).track_foreign(result));
 
     // Keep track of the time when a transport became online. As with
     // time of last sync, we are pessimistic here and assume that the
@@ -64,13 +64,13 @@ std::shared_ptr<AutoSyncManager> AutoSyncManager::createAutoSyncManager(Server &
     }
     p.m_btPresenceSignal.connect(PresenceStatus::PresenceSignal_t::slot_type(updatePresence,
                                                                              &result->m_btStartTime,
-                                                                             _1).track_foreign(result));
+                                                                             boost::placeholders::_1).track_foreign(result));
     if (p.getHttpPresence()) {
         result->m_httpStartTime = now;
     }
     p.m_httpPresenceSignal.connect(PresenceStatus::PresenceSignal_t::slot_type(updatePresence,
                                                                                &result->m_httpStartTime,
-                                                                               _1).track_foreign(result));
+                                                                               boost::placeholders::_1).track_foreign(result));
 
     return result;
 }
@@ -404,7 +404,7 @@ void AutoSyncManager::sessionStarted(const std::shared_ptr<Session> &session)
     task->m_lastSyncTime = Timespec::monotonic();
 
     // track permanent failure
-    session->m_doneSignal.connect(Session::DoneSignal_t::slot_type(&AutoSyncManager::anySyncDone, this, task.get(), _1).track_foreign(task).track_foreign(me));
+    session->m_doneSignal.connect(Session::DoneSignal_t::slot_type(&AutoSyncManager::anySyncDone, this, task.get(), boost::placeholders::_1).track_foreign(task).track_foreign(me));
 
     if (m_session == session) {
         // Only for our own auto sync session: notify user once session starts successful.
@@ -416,7 +416,7 @@ void AutoSyncManager::sessionStarted(const std::shared_ptr<Session> &session)
 
         // Notify user once session ends, with or without failure.
         // Same instance tracking as for sync success start.
-        session->m_doneSignal.connect(Session::DoneSignal_t::slot_type(&AutoSyncManager::autoSyncDone, this, task.get(), _1).track_foreign(task).track_foreign(me));
+        session->m_doneSignal.connect(Session::DoneSignal_t::slot_type(&AutoSyncManager::autoSyncDone, this, task.get(), boost::placeholders::_1).track_foreign(task).track_foreign(me));
     }
 }
 

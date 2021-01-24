@@ -684,7 +684,7 @@ bool RemoteDBusServer::execute(const std::vector<std::string> &args, const std::
         // react in the normal event loop.
         SuspendFlags &flags(SuspendFlags::getSuspendFlags());
         std::shared_ptr<SuspendFlags::Guard> signalGuard = flags.activate();
-        flags.m_stateChanged.connect(SuspendFlags::StateChanged_t::slot_type(SuspendFlagsChanged, m_session.get(), _1).track_foreign(m_session));
+        flags.m_stateChanged.connect(SuspendFlags::StateChanged_t::slot_type(SuspendFlagsChanged, m_session.get(), boost::placeholders::_1).track_foreign(m_session));
 
         //wait until status is 'done'
         while(m_result && !m_session->statusDone()) {
