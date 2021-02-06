@@ -21,7 +21,7 @@ fi
 # Start D-Bus session. We want to use the real D-Bus configuration
 # of the host here, because want to use some of its services (GNOME keyring,
 # GNOME/Ubuntu Online Accounts, etc.).
-for i in /etc/dbus-1/session.conf /usr/share/dbus-1/session.conf; do
+for i in  /usr/share/dbus-1/session.conf /etc/dbus-1/session.conf; do
     if [ -e $i ]; then
         DBUS_CONFIG=$i
         break
