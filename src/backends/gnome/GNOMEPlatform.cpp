@@ -21,9 +21,7 @@
 
 #ifdef USE_GNOME_KEYRING
 
-extern "C" {
 #include <libsecret/secret.h>
-}
 
 #include "GNOMEPlatform.h"
 
