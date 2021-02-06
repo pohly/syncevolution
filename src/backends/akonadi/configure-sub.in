@@ -14,7 +14,7 @@ if ! test "$KDEPIM_CFLAGS"; then
    fi
 fi
 if ! test "$KDEPIM_LIBS"; then
-   KDEPIM_LIBS="-L`kde4-config --install lib` -lakonadi-kde `${PKG_CONFIG} --libs QtDBus` -lQtCore -lkdeui -lkdecore"
+   KDEPIM_LIBS="-L`kde4-config --install lib` -lakonadi-kde `${PKG_CONFIG} --libs QtDBus` -lQtCore"
 fi
 AC_LANG_PUSH(C++)
 old_CPPFLAGS="$CPPFLAGS"
