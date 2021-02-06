@@ -1135,7 +1135,7 @@ bool Cmdline::run() {
             list<string> peers = from->getPeers();
             peers.sort(); // make code below deterministic
 
-            for (const std::string source: from->getSyncSources()) {
+            for (const std::string &source: from->getSyncSources()) {
                 for (const string &peer: peers) {
                     IniFileConfigNode node(from->getRootPath() + "/peers/" + peer + "/sources/" + source,
                                            "config.ini",
@@ -2021,7 +2021,7 @@ static void findPeerProps(FilterConfigNode::ConfigFilter &filter,
                           ConfigPropertyRegistry &registry,
                           set<string> &peerProps)
 {
-    for (const StringPair &entry: filter) {
+    for (const auto &entry: filter) {
         const ConfigProperty *prop = registry.find(entry.first);
         if (prop &&
             prop->getSharing() == ConfigProperty::NO_SHARING) {

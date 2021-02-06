@@ -300,7 +300,7 @@ void LocalTransportAgent::start()
         }
     }
 #endif
-    for (const StringPair &entry: SMLTKSharedMemory::singleton().getEnvForChild()) {
+    for (const auto &entry: SMLTKSharedMemory::singleton().getEnvForChild()) {
         m_forkexec->addEnvVar(entry.first, entry.second);
     }
     auto onConnect = [this] (const GDBusCXX::DBusConnectionPtr &conn) noexcept {

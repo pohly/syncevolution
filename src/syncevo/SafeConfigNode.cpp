@@ -57,7 +57,7 @@ void SafeConfigNode::readProperties(ConfigProps &props) const
     ConfigProps original;
     m_readOnlyNode->readProperties(original);
 
-    for (const StringPair &prop: original) {
+    for (const auto &prop: original) {
         std::string key = unescape(prop.first);
         std::string value = unescape(prop.second);
 

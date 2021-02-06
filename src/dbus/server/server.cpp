@@ -521,7 +521,7 @@ void Server::run()
     // plugins.
     StringMap map = getVersions();
     SE_LOG_DEBUG(NULL, "D-Bus server ready to run, versions:");
-    for (const StringPair &entry: map) {
+    for (const auto &entry: map) {
         SE_LOG_DEBUG(NULL, "%s: %s", entry.first.c_str(), entry.second.c_str());
     }
 

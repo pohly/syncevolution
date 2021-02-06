@@ -890,7 +890,7 @@ void Session::useHelperAsync(const SimpleResult &result, const StringMap &env)
                 m_forkExecParent->addEnvVar("SYNCEVOLUTION_USE_DLT", StringPrintf("%d", LoggerDLT::getCurrentDLTLogLevel()));
             }
 #endif
-            for (const StringPair &entry: env) {
+            for (const auto &entry: env) {
                 SE_LOG_DEBUG(NULL, "running helper with env variable %s=%s",
                              entry.first.c_str(), entry.second.c_str());
                 m_forkExecParent->addEnvVar(entry.first, entry.second);

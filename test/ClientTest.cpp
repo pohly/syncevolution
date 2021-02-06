@@ -225,7 +225,7 @@ std::pair<std::string, std::string> getPeerConfig(const std::string &source)
     if (peerConfig.empty()) {
         // Check for local HTTP server.
         std::string deviceId = local.getDevID();
-        for (const StringPair &peer: SyncConfig::getConfigs()) {
+        for (const auto &peer: SyncConfig::getConfigs()) {
             SyncConfig remote(peer.first);
             if (remote.getRemoteDevID() == deviceId) {
                 peerConfig = peer.first;
@@ -5611,7 +5611,7 @@ void SyncTests::doInterruptResume(int changes,
                     interruptAtMessage != 0 &&
                     interruptAtMessage + 1 != maxMsgNum &&
                     report.size() == 1) {
-                    for (const SyncReport::SourceReport_t &sourceReport: report) {
+                    for (const auto &sourceReport: report) {
                         CT_ASSERT(sourceReport.second.isResumeSync());
                     }
                 }

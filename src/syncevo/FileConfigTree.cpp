@@ -203,7 +203,7 @@ std::list<std::string> FileConfigTree::getChildren(const std::string &path)
     // first look at existing files
     if (!access(fullpath.c_str(), F_OK)) {
         ReadDir dir(fullpath);
-        for (const std::string entry: dir) {
+        for (const std::string &entry: dir) {
             if (isNode(fullpath, entry)) {
                 res.push_back(entry);
             }

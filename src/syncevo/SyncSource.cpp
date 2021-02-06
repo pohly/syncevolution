@@ -382,7 +382,7 @@ public:
         // library dependencies) first, then skip syncebook if loading
         // of syncebook-2 succeeded. If loading of syncebook-2 fails
         // due to missing libraries, we proceed to use syncebook.
-        for (const StringPair &entry: reverse(candidates)) {
+        for (const auto &entry: reverse(candidates)) {
             const std::string &basename = entry.first;
             const std::string &fullpath = entry.second;
             std::string replacement;
@@ -1150,7 +1150,7 @@ void SyncSourceRevisions::backupData(const SyncSource::Operations::ConstBackupIn
     // Ensure that source knows what we are going to read.
     std::vector<std::string> uids;
     uids.reserve(revisions->size());
-    for (const StringPair &mapping: *revisions) {
+    for (const auto &mapping: *revisions) {
         uids.push_back(mapping.first);
     }
 
@@ -1166,7 +1166,7 @@ void SyncSourceRevisions::backupData(const SyncSource::Operations::ConstBackupIn
 
     string item;
     errno = 0;
-    for (const StringPair &mapping: *revisions) {
+    for (const auto &mapping: *revisions) {
         const string &uid = mapping.first;
         const string &rev = mapping.second;
         m_raw->readItemRaw(uid, item);
@@ -1255,7 +1255,7 @@ void SyncSourceRevisions::restoreData(const SyncSource::Operations::ConstBackupI
     }
 
     // now remove items that were not in the backup
-    for (const StringPair &mapping: revisions) {
+    for (const auto &mapping: revisions) {
         try {
             report.incrementItemStat(report.ITEM_LOCAL,
                                      report.ITEM_REMOVED,
@@ -1293,7 +1293,7 @@ bool SyncSourceRevisions::detectChanges(ConfigNode &trackingNode, ChangeMode mod
         trackingNode.readProperties(props);
 
         RevisionMap_t revisions;
-        for (const StringPair &mapping: props) {
+        for (const auto &mapping: props) {
             const string &uid = mapping.first;
             const string &revision = mapping.second;
             addItem(uid);
@@ -1362,7 +1362,7 @@ bool SyncSourceRevisions::detectChanges(ConfigNode &trackingNode, ChangeMode mod
         trackingNode.clear();
     }
 
-    for (const StringPair &mapping: m_revisions) {
+    for (const auto &mapping: m_revisions) {
         const string &uid = mapping.first;
         const string &revision = mapping.second;
 
@@ -1392,7 +1392,7 @@ bool SyncSourceRevisions::detectChanges(ConfigNode &trackingNode, ChangeMode mod
         ConfigProps props;
         trackingNode.readProperties(props);
 
-        for (const StringPair &mapping: props) {
+        for (const auto &mapping: props) {
             const string &uid(mapping.first);
             if (getAllItems().find(uid) == getAllItems().end()) {
                 addItem(uid, DELETED);
@@ -1401,7 +1401,7 @@ bool SyncSourceRevisions::detectChanges(ConfigNode &trackingNode, ChangeMode mod
         }
 
         // now update tracking node
-        for (const StringPair &update: revUpdates) {
+        for (const auto &update: revUpdates) {
             trackingNode.setProperty(update.first, update.second);
         }
     }

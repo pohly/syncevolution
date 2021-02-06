@@ -184,7 +184,7 @@ void CalDAVSource::updateAllSubItems(SubRevisionMap_t &revisions)
     m_cache.clear();
     m_cache.m_initialized = false;
     std::list<std::string> mustRead;
-    for (const StringPair &item: items) {
+    for (const auto &item: items) {
         auto it = revisions.find(item.first);
         if (it == revisions.end() ||
             it->second.m_revision != item.second) {

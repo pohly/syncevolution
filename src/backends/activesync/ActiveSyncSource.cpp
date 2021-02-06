@@ -379,7 +379,7 @@ void ActiveSyncSource::beginSync(const std::string &lastToken, const std::string
     // old items + new (added to m_ids above) - deleted (removed above)
     ConfigProps props;
     m_ids->readProperties(props);
-    for (const StringPair &entry: props) {
+    for (const auto &entry: props) {
         const std::string &luid = entry.first;
         SE_LOG_DEBUG(getDisplayName(), "existing item %s", luid.c_str());
         addItem(luid, ANY);

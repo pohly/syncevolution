@@ -247,7 +247,7 @@ string SyncConfig::normalizeConfigString(const string &config, NormalizeFlags fl
             // when ignoring their context. Peer list is sorted by name,
             // therefore shorter config names (= without context) are
             // found first, as intended.
-            for (const StringPair &entry: getConfigs()) {
+            for (const auto &entry: getConfigs()) {
                 string entry_peer, entry_context;
                 splitConfigString(entry.first, entry_peer, entry_context);
                 if (normal == entry_peer) {
@@ -2549,7 +2549,7 @@ void SyncConfig::removeSyncSource(const string &name)
             pathName = m_contextPath + "/sources/" + lower;
             m_tree->remove(pathName);
             // ... and the peer-specific ones of *all* peers
-            for (const std::string peer: m_tree->getChildren(m_contextPath + "/peers")) {
+            for (const std::string &peer: m_tree->getChildren(m_contextPath + "/peers")) {
                 m_tree->remove(m_contextPath + "/peers/" + peer + "/sources/" + lower);
             }
         } else {

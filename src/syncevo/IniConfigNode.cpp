@@ -307,14 +307,14 @@ void IniHashConfigNode::read()
 
 void IniHashConfigNode::toFile(std::ostream &file)
 {
-    for (const StringPair &prop: m_props) {
+    for (const auto &prop: m_props) {
         file << prop.first << " = " <<  prop.second << std::endl;
     }
 }
 
 void IniHashConfigNode::readProperties(ConfigProps &props) const
 {
-    for (const StringPair &prop: m_props) {
+    for (const auto &prop: m_props) {
         props.insert(ConfigProps::value_type(prop.first, InitStateString(prop.second, true)));
     }
 }

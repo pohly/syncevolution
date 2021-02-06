@@ -82,7 +82,7 @@ void FilterConfigNode::readProperties(ConfigProps &props) const
 {
     m_readOnlyNode->readProperties(props);
 
-    for (const StringPair &filter: m_filter) {
+    for (const auto &filter: m_filter) {
         // overwrite existing values or add new ones
         props[filter.first] = filter.second;
     }

@@ -61,7 +61,7 @@ public:
     {
         //temporarily set environment variables and restore them after running
         list<std::shared_ptr<ScopedEnvChange> > changes;
-        for (const StringPair &var: m_envVars) {
+        for (const auto &var: m_envVars) {
             changes.push_back(std::make_unique<ScopedEnvChange>(var.first, var.second));
         }
 

@@ -49,7 +49,7 @@ InitStateString ConfigProps::get(const std::string &key, const std::string &def)
 ConfigProps::operator std::string () const
 {
     std::vector<std::string> res;
-    for (const StringPair &filter: *this) {
+    for (const auto &filter: *this) {
         res.push_back(filter.first + " = " + filter.second);
     }
     sort(res.begin(), res.end());
@@ -140,7 +140,7 @@ bool FullProps::hasProperties(PropCheckMode mode) const
         }
         if (mode == IGNORE_GLOBAL_PROPS) {
             const ConfigPropertyRegistry &registry = SyncConfig::getRegistry();
-            for (const StringPair &entry: context.second.m_syncProps) {
+            for (const auto &entry: context.second.m_syncProps) {
                 const ConfigProperty *prop = registry.find(entry.first);
                 if (!prop ||
                     prop->getSharing() != ConfigProperty::GLOBAL_SHARING) {

@@ -2387,7 +2387,7 @@ string XMLFiles::get(Category category)
 {
     string res;
 
-    for (const StringPair &entry: m_files[category]) {
+    for (const auto &entry: m_files[category]) {
         string content;
         ReadFile(entry.second, content);
         res += content;

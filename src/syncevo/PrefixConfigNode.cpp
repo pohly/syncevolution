@@ -59,7 +59,7 @@ void PrefixConfigNode::readProperties(ConfigProps &props) const
     ConfigProps original;
     m_readOnlyNode->readProperties(original);
 
-    for (const StringPair &prop: original) {
+    for (const auto &prop: original) {
         std::string key = prop.first;
         std::string value = prop.second;
 
@@ -73,7 +73,7 @@ void PrefixConfigNode::clear()
 {
     ConfigProps original;
     m_readOnlyNode->readProperties(original);
-    for (const StringPair &prop: original) {
+    for (const auto &prop: original) {
         std::string key = prop.first;
         if (boost::starts_with(key, m_prefix)) {
             m_node->removeProperty(key);

@@ -336,7 +336,7 @@ public:
         nodes.getProperties()->setProperty("backend", InitStateString(m_type, true));
         SE_LOG_DEBUG(NULL, "   additional property backend = %s (from CLIENT_TEST_WEBDAV)",
                      m_type.c_str());
-        for (const StringPair &propval: m_props) {
+        for (const auto &propval: m_props) {
             std::shared_ptr<FilterConfigNode> node = context->getNode(propval.first);
             if (node) {
                 SE_LOG_DEBUG(NULL, "   additional property %s = %s (from CLIENT_TEST_WEBDAV)",

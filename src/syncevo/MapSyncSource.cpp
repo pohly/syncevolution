@@ -80,7 +80,7 @@ void MapSyncSource::detectChanges(SyncSourceRevisions::ChangeMode mode)
     m_revisions.clear();
     ConfigProps props;
     m_trackingNode->readProperties(props);
-    for (const StringPair &prop: props) {
+    for (const auto &prop: props) {
         const std::string &mainid = prop.first;
         const std::string &value = prop.second;
         size_t pos = value.find('/');
