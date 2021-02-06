@@ -44,8 +44,8 @@ typedef struct _SyncevoServerPrivate {
     DBusGProxy *proxy;
 } SyncevoServerPrivate;
 
-#define GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), SYNCEVO_TYPE_SERVER, SyncevoServerPrivate))
-G_DEFINE_TYPE (SyncevoServer, syncevo_server, G_TYPE_OBJECT);
+#define GET_PRIVATE(o) syncevo_server_get_instance_private (o)
+G_DEFINE_TYPE_WITH_CODE (SyncevoServer, syncevo_server, G_TYPE_OBJECT, G_ADD_PRIVATE (SyncevoServer))
 
 static ServerAsyncData*
 server_async_data_new (SyncevoServer *server,
@@ -172,7 +172,7 @@ dispose (GObject *object)
 {
     SyncevoServerPrivate *priv;
 
-    priv = GET_PRIVATE (object);
+    priv = GET_PRIVATE ((SyncevoServer *)object);
 
     if (priv->proxy) {
         dbus_g_proxy_disconnect_signal (priv->proxy, "SessionChanged",

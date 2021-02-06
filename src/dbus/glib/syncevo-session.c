@@ -47,8 +47,8 @@ typedef struct _SyncevoSessionPrivate {
     char *path;
 } SyncevoSessionPrivate;
 
-#define GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), SYNCEVO_TYPE_SESSION, SyncevoSessionPrivate))
-G_DEFINE_TYPE (SyncevoSession, syncevo_session, G_TYPE_OBJECT);
+#define GET_PRIVATE(o) syncevo_session_get_instance_private (o)
+G_DEFINE_TYPE_WITH_CODE (SyncevoSession, syncevo_session, G_TYPE_OBJECT, G_ADD_PRIVATE (SyncevoSession));
 
 static SessionAsyncData*
 session_async_data_new (SyncevoSession *session,
@@ -180,7 +180,7 @@ dispose (GObject *object)
 {
     SyncevoSessionPrivate *priv;
 
-    priv = GET_PRIVATE (object);
+    priv = GET_PRIVATE ((SyncevoSession *)object);
 
     if (priv->proxy) {
         dbus_g_proxy_disconnect_signal (priv->proxy, "ProgressChanged",
