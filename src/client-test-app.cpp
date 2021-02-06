@@ -403,8 +403,8 @@ public:
                 std::shared_ptr<TransportAgent>agent =SyncContext::createTransportAgent();
                 if (!wrapper.get())
                     return agent;
-                dynamic_cast<TransportWrapper*>(wrapper.get())->setAgent(agent);
-                dynamic_cast<TransportWrapper*>(wrapper.get())->setSyncOptions(&m_options);
+                static_cast<TransportWrapper*>(wrapper.get())->setAgent(agent);
+                static_cast<TransportWrapper*>(wrapper.get())->setSyncOptions(&m_options);
                 return wrapper;
             }
 
