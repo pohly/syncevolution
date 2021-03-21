@@ -1,3 +1,26 @@
+SyncEvolution 1.5.3 -> 2.0.0, 21.03.2021
+========================================
+
+This release modernizes the code base and removes usage of out-dated
+libraries and APIs. All Python scripts require Python 3. The major
+version bump reflects that this release is not just a minor bug fix.
+However, no new features were added.
+
+Binaries on syncevolution.org get built for distros >= Ubuntu Bionic
+and Debian Buster. Testing is now based on Docker containers instead
+of a custom schroot solution, so adding testing against other distros
+will be easier in the future. Compilation on Fedora Rawhide was
+already added.
+
+Some features are no longer built and thus untested:
+- ActiveSync
+- KDE
+
+The code is still there, but needs help from interested developers to
+ensure that it really works. It may get removed in a future version if
+there is no interest.
+
+
 SyncEvolution 1.5.2 -> 1.5.3, 03.01.2018
 ========================================
 
