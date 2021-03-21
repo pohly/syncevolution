@@ -15,7 +15,8 @@ if filename == '-':
 else:
     log = open(filename, encoding='utf-8')
 
-out = sys.stdout
+# Always write as UTF-8.
+out = open(sys.stdout.fileno(), mode='w', encoding='utf8')
 
 # matches [DEBUG/DEVELOPER/...] tags at the start of the line,
 # used to mark text via <span class=mode>
@@ -54,7 +55,7 @@ session = re.compile(r'(Client_(?:Source|Sync)(?:_\w+)+\S+)')
 out.write('''<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
 <html>
 <head>
-   <meta http-equiv="content-type" content="text/html; charset=None">
+   <meta charset=utf-8">
    <style type="text/css">
 td.linenos { background-color: #f0f0f0; padding-right: 10px; }
 span.lineno { background-color: #f0f0f0; padding: 0 5px 0 5px; }
